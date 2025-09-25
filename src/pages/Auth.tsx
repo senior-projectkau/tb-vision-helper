@@ -172,7 +172,7 @@ export default function Auth() {
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-medical-primary hover:bg-medical-primary/90 text-white font-semibold py-3 transition-all duration-200 transform hover:scale-[1.02]"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 transition-all duration-200 transform hover:scale-[1.02] border-0"
                     disabled={isLoading || !email || !password}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -231,7 +231,7 @@ export default function Auth() {
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-medical-primary hover:bg-medical-primary/90 text-white font-semibold py-3 transition-all duration-200 transform hover:scale-[1.02]"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 transition-all duration-200 transform hover:scale-[1.02] border-0"
                     disabled={isLoading || !email || !password || !fullName}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

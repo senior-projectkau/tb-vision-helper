@@ -6,7 +6,7 @@ import { FileUpload } from "@/components/FileUpload";
 import { ResultsDisplay } from "@/components/ResultsDisplay";
 import { TBChatbot } from "@/components/TBChatbot";
 import DetectionHistory from "@/components/DetectionHistory";
-import { Activity, Stethoscope, Shield, Zap, CheckCircle, User, LogOut } from "lucide-react";
+import { Activity, Stethoscope, Shield, Zap, CheckCircle, User, LogOut, History, Clock } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import medicalRoom from "@/assets/medical-room.jpg";
@@ -22,6 +22,7 @@ export interface DetectionResult {
 const Index = () => {
   const [result, setResult] = useState<DetectionResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const { user, session, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -140,6 +141,15 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHistory(!showHistory)}
+                className="flex items-center space-x-2 border-primary text-primary hover:bg-primary hover:text-white"
+              >
+                <History className="w-4 h-4" />
+                <span>{showHistory ? 'Hide History' : 'View History'}</span>
+              </Button>
               <div className="flex items-center space-x-2 text-primary">
                 <User className="w-4 h-4" />
                 <span className="text-sm font-medium">{user.email}</span>
@@ -209,12 +219,14 @@ const Index = () => {
               </div>
             </section>
 
-            {/* Detection History Section */}
-            <section className="py-16">
-              <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-                <DetectionHistory />
-              </div>
-            </section>
+            {/* Detection History Section - Only show when requested */}
+            {showHistory && (
+              <section className="py-16 bg-muted/30">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                  <DetectionHistory />
+                </div>
+              </section>
+            )}
           </>
         ) : (
           <div className="py-16">
