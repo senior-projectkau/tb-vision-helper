@@ -140,37 +140,43 @@ export default function Auth() {
               <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="signin-email">Email</Label>
                     <Input
-                      id="email"
+                      id="signin-email"
+                      name="email"
                       type="email"
                       placeholder="doctor@hospital.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       disabled={isLoading}
+                      className="transition-all duration-200 focus:ring-2 focus:ring-medical-primary"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="signin-password">Password</Label>
                     <Input
-                      id="password"
+                      id="signin-password"
+                      name="password"
                       type="password"
+                      placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       disabled={isLoading}
+                      minLength={6}
+                      className="transition-all duration-200 focus:ring-2 focus:ring-medical-primary"
                     />
                   </div>
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-medical-primary hover:bg-medical-primary/90"
-                    disabled={isLoading}
+                    className="w-full bg-medical-primary hover:bg-medical-primary/90 text-white font-semibold py-3 transition-all duration-200 transform hover:scale-[1.02]"
+                    disabled={isLoading || !email || !password}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign In
+                    {isLoading ? 'Signing In...' : 'Sign In with Email & Password'}
                   </Button>
                 </form>
               </TabsContent>
@@ -178,35 +184,40 @@ export default function Auth() {
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="signup-name">Full Name</Label>
                     <Input
-                      id="fullName"
+                      id="signup-name"
+                      name="fullName"
                       type="text"
                       placeholder="Dr. John Smith"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
                       disabled={isLoading}
+                      className="transition-all duration-200 focus:ring-2 focus:ring-medical-primary"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="signup-email">Email</Label>
                     <Input
-                      id="email"
+                      id="signup-email"
+                      name="email"
                       type="email"
                       placeholder="doctor@hospital.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       disabled={isLoading}
+                      className="transition-all duration-200 focus:ring-2 focus:ring-medical-primary"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="signup-password">Password</Label>
                     <Input
-                      id="password"
+                      id="signup-password"
+                      name="password"
                       type="password"
                       placeholder="Minimum 6 characters"
                       value={password}
@@ -214,16 +225,17 @@ export default function Auth() {
                       required
                       minLength={6}
                       disabled={isLoading}
+                      className="transition-all duration-200 focus:ring-2 focus:ring-medical-primary"
                     />
                   </div>
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-medical-primary hover:bg-medical-primary/90"
-                    disabled={isLoading}
+                    className="w-full bg-medical-primary hover:bg-medical-primary/90 text-white font-semibold py-3 transition-all duration-200 transform hover:scale-[1.02]"
+                    disabled={isLoading || !email || !password || !fullName}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Account
+                    {isLoading ? 'Creating Account...' : 'Create Account with Email & Password'}
                   </Button>
                 </form>
               </TabsContent>
