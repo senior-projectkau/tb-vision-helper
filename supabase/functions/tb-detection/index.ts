@@ -2,6 +2,9 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// TODO: Uncomment when ONNX model is uploaded
+// import { pipeline } from 'https://esm.sh/@huggingface/transformers@3';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -44,8 +47,30 @@ serve(async (req) => {
 
     console.log(`Image uploaded successfully: ${fileName}`);
 
-    // TODO: Replace this mock prediction with actual PyTorch model inference
-    // For now, we'll use a mock result based on image analysis
+    // TODO: Replace this with actual ONNX model inference
+    // Once you upload your converted ONNX model, uncomment the code below:
+    
+    /*
+    // Load your TB detection model (convert tb_model1.pt to ONNX first)
+    const classifier = await pipeline('image-classification', 'path-to-your-model');
+    
+    // Get the uploaded image for processing
+    const { data: imageData } = await supabase.storage
+      .from('xray-uploads')
+      .download(fileName);
+    
+    if (imageData) {
+      // Run inference on the actual image
+      const predictions = await classifier(imageData);
+      const topPrediction = predictions[0];
+      
+      // Map your model's output to TB detection format
+      const prediction = topPrediction.label.includes('tuberculosis') ? 'tuberculosis' : 'normal';
+      const confidence = Math.round(topPrediction.score * 100);
+    }
+    */
+    
+    // Mock prediction (remove when real model is integrated)
     const mockPrediction = Math.random() > 0.5 ? 'tuberculosis' : 'normal';
     const mockConfidence = Math.floor(Math.random() * 30) + 70; // 70-100%
 
