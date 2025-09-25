@@ -125,7 +125,7 @@ export const TBChatbot = () => {
       {/* Chat Toggle Button */}
       <Button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-gradient-primary shadow-upload hover:scale-105 transition-all duration-300 z-50"
+        className="fixed bottom-6 right-6 h-16 w-16 rounded-full bg-gradient-primary shadow-glow hover:scale-105 transition-all duration-300 z-50 animate-pulse-glow"
         size="icon"
       >
         {isOpen ? (
@@ -137,7 +137,7 @@ export const TBChatbot = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="fixed bottom-24 right-6 w-96 h-[500px] bg-card shadow-upload border-2 z-40 flex flex-col">
+        <Card className="fixed bottom-24 right-6 w-96 h-[500px] bg-card/95 backdrop-blur-md shadow-upload border-2 z-40 flex flex-col animate-scale-in">
           {/* Header */}
           <div className="p-4 border-b bg-gradient-primary rounded-t-lg">
             <div className="flex items-center gap-3">
@@ -145,7 +145,7 @@ export const TBChatbot = () => {
                 <Bot className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-white">TB Assistant</h3>
+                <h3 className="font-semibold text-white">TB Medical Assistant</h3>
                 <p className="text-xs text-white/80">Ask me about tuberculosis</p>
               </div>
             </div>
