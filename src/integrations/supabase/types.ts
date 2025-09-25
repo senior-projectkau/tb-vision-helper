@@ -14,7 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      tb_detections: {
+        Row: {
+          confidence: number
+          created_at: string
+          id: string
+          image_path: string
+          prediction: string
+        }
+        Insert: {
+          confidence: number
+          created_at?: string
+          id?: string
+          image_path: string
+          prediction: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          image_path?: string
+          prediction?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

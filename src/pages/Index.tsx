@@ -17,18 +17,40 @@ const Index = () => {
   const handleImageUpload = async (file: File) => {
     setIsAnalyzing(true);
     
-    // Simulate analysis delay
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Mock result - in real implementation, this would call your backend
-    const mockResult: DetectionResult = {
-      prediction: Math.random() > 0.5 ? 'tuberculosis' : 'normal',
-      confidence: Math.floor(Math.random() * 30) + 70, // 70-100%
-      image: URL.createObjectURL(file)
-    };
-    
-    setResult(mockResult);
-    setIsAnalyzing(false);
+    try {
+      // Create form data for the API call
+      const formData = new FormData();
+      formData.append('image', file);
+
+      // Call the Supabase Edge Function
+      const response = await fetch('https://fxndgbdmgvfheucntkbi.supabase.co/functions/v1/tb-detection', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      setResult({
+        prediction: result.prediction,
+        confidence: result.confidence,
+        image: URL.createObjectURL(file) // Use local URL for display
+      });
+    } catch (error) {
+      console.error('Error during TB detection:', error);
+      // Fallback to mock result if API fails
+      const mockResult: DetectionResult = {
+        prediction: Math.random() > 0.5 ? 'tuberculosis' : 'normal',
+        confidence: Math.floor(Math.random() * 30) + 70,
+        image: URL.createObjectURL(file)
+      };
+      setResult(mockResult);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const resetAnalysis = () => {

@@ -1,1 +1,4 @@
 project_id = "fxndgbdmgvfheucntkbi"
+
+[functions.tb-detection]
+verify_jwt = false
