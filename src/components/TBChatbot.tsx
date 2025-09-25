@@ -36,26 +36,61 @@ export const TBChatbot = () => {
   const generateResponse = (userMessage: string): string => {
     const message = userMessage.toLowerCase();
     
-    for (const [key, response] of Object.entries(TB_RESPONSES)) {
-      if (message.includes(key)) {
-        return response;
-      }
+    // Check if the message is TB-related at all
+    const tbKeywords = ['tb', 'tuberculosis', 'chest', 'lung', 'cough', 'x-ray', 'xray'];
+    const isTbRelated = tbKeywords.some(keyword => message.includes(keyword));
+    
+    // If not TB-related, respond appropriately
+    if (!isTbRelated) {
+      return 'I\'m specifically designed to help with tuberculosis (TB) related questions. I can provide information about TB symptoms, treatment, prevention, diagnosis, and types. Is there something about TB you\'d like to know?';
     }
     
-    // Check for specific keywords
-    if (message.includes('what') && message.includes('tb')) {
+    // Enhanced keyword matching for TB-related questions
+    if (message.includes('prevent') || message.includes('prevention') || 
+        message.includes('how to avoid') || message.includes('stop getting')) {
+      return TB_RESPONSES.prevention;
+    }
+    
+    if (message.includes('symptom') || message.includes('sign') || 
+        message.includes('how do i know') || message.includes('what are the')) {
+      return TB_RESPONSES.symptoms;
+    }
+    
+    if (message.includes('treat') || message.includes('cure') || 
+        message.includes('medicine') || message.includes('drug') || message.includes('antibiotic')) {
+      return TB_RESPONSES.treatment;
+    }
+    
+    if (message.includes('contagious') || message.includes('spread') || 
+        message.includes('catch') || message.includes('transmit')) {
+      return TB_RESPONSES.contagious;
+    }
+    
+    if (message.includes('diagnos') || message.includes('detect') || 
+        message.includes('find out') || message.includes('how to know')) {
+      return TB_RESPONSES.diagnosis;
+    }
+    
+    if (message.includes('type') || message.includes('kind') || 
+        message.includes('different') || message.includes('latent') || message.includes('active')) {
+      return TB_RESPONSES.types;
+    }
+    
+    // Check for specific question patterns
+    if (message.includes('what') && (message.includes('tb') || message.includes('tuberculosis'))) {
       return 'Tuberculosis (TB) is an infectious disease caused by bacteria that primarily affects the lungs. It can be serious but is treatable with proper medical care.';
     }
     
-    if (message.includes('test') || message.includes('screening')) {
+    if (message.includes('test') || message.includes('screening') || message.includes('check')) {
       return 'TB testing includes chest X-rays, sputum tests, tuberculin skin tests, and blood tests. Regular screening is important for high-risk individuals.';
     }
     
-    if (message.includes('vaccine') || message.includes('bcg')) {
+    if (message.includes('vaccine') || message.includes('bcg') || message.includes('shot')) {
       return 'The BCG vaccine provides some protection against TB, especially in children. Its effectiveness varies by region and is not used in all countries.';
     }
     
-    return 'I understand you\'re asking about TB. I can help with information about symptoms, treatment, prevention, diagnosis, and types of TB. Could you be more specific about what you\'d like to know?';
+    // Fallback for TB-related questions that don't match specific patterns
+    return 'I can help with information about TB symptoms, treatment, prevention, diagnosis, and types. Could you be more specific about what aspect of tuberculosis you\'d like to know about?';
   };
 
   const handleSendMessage = () => {
