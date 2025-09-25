@@ -168,6 +168,7 @@ const Index = () => {
         </div>
       </header>
 
+      <main>
         {!result && !isAnalyzing ? (
           <>
             {/* Hero Section */}
@@ -375,6 +376,7 @@ const Index = () => {
             </div>
           </div>
         )}
+      </main>
 
       <TBChatbot />
     </div>
