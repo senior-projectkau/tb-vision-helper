@@ -330,38 +330,6 @@ const Index = () => {
                   <FileUpload onUpload={handleImageUpload} />
                 </div>
 
-                {/* Test Your Custom JavaScript */}
-                <div className="mt-8 p-6 bg-card/50 rounded-2xl border">
-                  <h4 className="text-lg font-semibold text-foreground mb-4 text-center">
-                    🧪 Test Your Custom JavaScript Module
-                  </h4>
-                  <div className="flex flex-wrap justify-center gap-4">
-                    <Button 
-                      onClick={() => triggerCustomEvent()} 
-                      variant="outline"
-                      className="border-primary text-primary hover:bg-primary hover:text-white"
-                    >
-                      🎯 Trigger Custom Event
-                    </Button>
-                    <Button 
-                      onClick={() => {
-                        const result = performCalculation(5, 3);
-                        toast({
-                          title: "Calculation Complete",
-                          description: `Result: ${result}`,
-                        });
-                      }} 
-                      variant="outline"
-                      className="border-success text-success hover:bg-success hover:text-white"
-                    >
-                      🔢 Run Calculation (5+3)
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mt-3">
-                    Check your browser console to see the JavaScript module in action!
-                  </p>
-                </div>
-
                 {/* Trust Indicators */}
                 <div className="grid md:grid-cols-3 gap-6 mt-16">
                   <div className="text-center">
