@@ -9,7 +9,7 @@ import DetectionHistory from "@/components/DetectionHistory";
 import { Activity, Stethoscope, Shield, Zap, CheckCircle, User, LogOut, History, Clock } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useCustomScript } from '@/hooks/useCustomScript';
+
 
 import medicalRoom from "@/assets/medical-room.jpg";
 import doctorAnalysis from "@/assets/doctor-analysis.jpg";
@@ -29,8 +29,6 @@ const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Use your custom JavaScript functionality
-  const { triggerCustomEvent, performCalculation } = useCustomScript();
 
   useEffect(() => {
     if (!loading && !user) {
