@@ -147,26 +147,7 @@ serve(async (req) => {
 
     } catch (modelError) {
       console.error('Error in TB detection analysis:', modelError);
-      
-      // Enhanced fallback that uses filename analysis for validation
-      const isLabeledTB = fileName.toLowerCase().includes('tuberculosis') || 
-                         fileName.toLowerCase().includes('tb');
-      const isLabeledNormal = fileName.toLowerCase().includes('normal');
-      
-      if (isLabeledTB) {
-        prediction = 'tuberculosis';
-        confidence = 85;
-        console.log('Fallback: Using filename analysis - TB detected');
-      } else if (isLabeledNormal) {
-        prediction = 'normal';
-        confidence = 90;
-        console.log('Fallback: Using filename analysis - Normal detected');
-      } else {
-        // Random with medical safety bias (favor normal for safety)
-        prediction = Math.random() > 0.8 ? 'tuberculosis' : 'normal';
-        confidence = Math.floor(Math.random() * 20) + 70;
-        console.log(`Fallback: Random prediction - ${prediction} with ${confidence}% confidence`);
-      }
+      throw modelError; // Only use real model - no fallbacks
     }
 
     // Store detection result in database
