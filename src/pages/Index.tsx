@@ -207,7 +207,7 @@ const Index = () => {
                           <CheckCircle className="h-5 w-5 text-success" />
                         </div>
                         <div>
-                          <div className="font-semibold">99.2% Accuracy</div>
+                          <div className="font-semibold">90% Accuracy</div>
                           <div className="text-sm text-white/70">Clinical Grade</div>
                         </div>
                       </div>
@@ -265,7 +265,7 @@ const Index = () => {
                     </div>
                     <h4 className="text-xl font-bold text-foreground mb-4">Clinical Accuracy</h4>
                     <p className="text-muted-foreground leading-relaxed">
-                      Our AI model is trained on over 100,000 chest X-rays and validated by radiologists, 
+                      Our AI model is trained on 3,500 chest X-rays and validated by radiologists, 
                       ensuring medical-grade accuracy in tuberculosis detection.
                     </p>
                   </div>
@@ -339,7 +339,7 @@ const Index = () => {
                       className="w-16 h-16 rounded-xl mx-auto mb-4 object-cover shadow-lg"
                     />
                     <h4 className="font-semibold text-foreground mb-2">Advanced AI Model</h4>
-                    <p className="text-sm text-muted-foreground">Trained on millions of medical images</p>
+                    <p className="text-sm text-muted-foreground">Trained on 3,500 chest X-ray images</p>
                   </div>
                   <div className="text-center">
                     <div className="w-16 h-16 bg-gradient-primary rounded-xl mx-auto mb-4 flex items-center justify-center shadow-lg">
