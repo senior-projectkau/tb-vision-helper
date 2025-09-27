@@ -9,6 +9,8 @@ import DetectionHistory from "@/components/DetectionHistory";
 import { Activity, Stethoscope, Shield, Zap, CheckCircle, User, LogOut, History, Clock } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useCustomScript } from '@/hooks/useCustomScript';
+import CustomScript from '@/components/CustomScript';
 import medicalRoom from "@/assets/medical-room.jpg";
 import doctorAnalysis from "@/assets/doctor-analysis.jpg";
 import tbBacteria from "@/assets/tb-bacteria.jpg";
@@ -26,6 +28,9 @@ const Index = () => {
   const { user, session, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Use your custom JavaScript functionality
+  const { customFunction } = useCustomScript();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -378,6 +383,9 @@ const Index = () => {
         )}
       </main>
 
+      {/* Your custom JavaScript component */}
+      <CustomScript />
+      
       <TBChatbot />
     </div>
   );
