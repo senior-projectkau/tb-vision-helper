@@ -10,7 +10,7 @@ import { Activity, Stethoscope, Shield, Zap, CheckCircle, User, LogOut, History,
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useCustomScript } from '@/hooks/useCustomScript';
-import CustomScript from '@/components/CustomScript';
+
 import medicalRoom from "@/assets/medical-room.jpg";
 import doctorAnalysis from "@/assets/doctor-analysis.jpg";
 import tbBacteria from "@/assets/tb-bacteria.jpg";
@@ -383,8 +383,6 @@ const Index = () => {
         )}
       </main>
 
-      {/* Your custom JavaScript component */}
-      <CustomScript />
       
       <TBChatbot />
     </div>
