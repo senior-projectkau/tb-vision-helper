@@ -23,12 +23,24 @@ export const useTBModel = () => {
     try {
       console.log('Loading ONNX model from Supabase storage...');
       
+      // First, check if we can access the file
+      const { data: fileList, error: listError } = await supabase.storage
+        .from('tb-models')
+        .list();
+
+      console.log('Files in tb-models bucket:', fileList);
+      
+      if (listError) {
+        throw new Error(`Cannot list files: ${listError.message}`);
+      }
+
       // Download the model file directly
       const { data: modelBlob, error: downloadError } = await supabase.storage
         .from('tb-models')
         .download('tb_model1.onnx');
 
       if (downloadError) {
+        console.error('Download error details:', downloadError);
         throw new Error(`Failed to download model: ${downloadError.message}`);
       }
 
@@ -37,14 +49,22 @@ export const useTBModel = () => {
       }
 
       console.log('Model downloaded successfully, size:', modelBlob.size, 'bytes');
+      console.log('Model type:', modelBlob.type);
+
+      // Verify it's actually an ONNX file (should start with magic bytes)
+      const sample = await modelBlob.slice(0, 100).arrayBuffer();
+      const view = new Uint8Array(sample);
+      console.log('File starts with:', Array.from(view.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
       // Convert blob to ArrayBuffer
       const arrayBuffer = await modelBlob.arrayBuffer();
       console.log('Model converted to ArrayBuffer');
 
-      // Load the ONNX model from ArrayBuffer
+      // Try to load the ONNX model from ArrayBuffer
+      console.log('Creating ONNX session with WASM backend...');
       const session = await ort.InferenceSession.create(arrayBuffer, {
         executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all',
       });
 
       console.log('ONNX model loaded successfully');
@@ -55,6 +75,7 @@ export const useTBModel = () => {
       setIsLoading(false);
     } catch (err) {
       console.error('Error loading ONNX model:', err);
+      console.error('Full error details:', JSON.stringify(err, null, 2));
       setError(err instanceof Error ? err.message : 'Failed to load model');
       setIsLoading(false);
     }
