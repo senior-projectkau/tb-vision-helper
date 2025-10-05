@@ -7,6 +7,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to apply softmax
+function softmax(arr: number[] | Float32Array | Float64Array): number[] {
+  const values = Array.from(arr);
+  const maxVal = Math.max(...values);
+  const exps = values.map(x => Math.exp(x - maxVal));
+  const sumExps = exps.reduce((a, b) => a + b, 0);
+  return exps.map(x => x / sumExps);
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -67,113 +76,15 @@ serve(async (req) => {
 
     console.log(`Image uploaded successfully: ${fileName}`);
 
-    // Initialize prediction variables
-    let prediction: string = 'normal';
-    let confidence: number = 75;
-
-    console.log('Starting TB detection with AI vision analysis...');
+    // For this edge function, we'll just handle file upload and storage
+    // The actual ONNX inference will be done client-side in the browser
+    // where ONNX Runtime Web works properly
     
-    try {
-      // Download the uploaded image
-      const { data: imageData, error: imageError } = await supabase.storage
-        .from('xray-uploads')
-        .download(fileName);
-      
-      if (imageError) throw imageError;
-      console.log('Image downloaded for AI analysis');
-
-      // Convert image to base64
-      const imageArrayBuffer = await imageData.arrayBuffer();
-      const imageBytes = new Uint8Array(imageArrayBuffer);
-      const base64Image = btoa(String.fromCharCode(...imageBytes));
-      const imageUrl = `data:image/png;base64,${base64Image}`;
-
-      // Get Lovable AI API key
-      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-      if (!LOVABLE_API_KEY) {
-        throw new Error('LOVABLE_API_KEY not configured');
-      }
-
-      // Call Lovable AI with vision capabilities
-      console.log('Calling Lovable AI for X-ray analysis...');
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a medical AI assistant specialized in analyzing chest X-ray images for tuberculosis detection. 
-Analyze the provided X-ray image and determine if it shows signs of tuberculosis or appears normal.
-
-Respond ONLY with a valid JSON object in this exact format:
-{"prediction": "tuberculosis" or "normal", "confidence": number between 70-95}
-
-Base your analysis on:
-- Lung opacity patterns
-- Presence of infiltrates or cavitations
-- Abnormal densities
-- Overall lung field appearance
-
-Be conservative with confidence scores - use 70-85% for clear cases and 85-95% for very obvious cases.`
-            },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Analyze this chest X-ray image for signs of tuberculosis. Respond only with the JSON object as specified.'
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: imageUrl
-                  }
-                }
-              ]
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 100
-        })
-      });
-
-      if (!aiResponse.ok) {
-        const errorText = await aiResponse.text();
-        console.error('AI API error:', aiResponse.status, errorText);
-        throw new Error(`AI API error: ${aiResponse.status}`);
-      }
-
-      const aiResult = await aiResponse.json();
-      const aiContent = aiResult.choices?.[0]?.message?.content;
-      
-      console.log('AI response:', aiContent);
-
-      // Parse AI response
-      const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const analysis = JSON.parse(jsonMatch[0]);
-        prediction = analysis.prediction;
-        confidence = analysis.confidence;
-        console.log(`AI Analysis: ${prediction} with ${confidence}% confidence`);
-      } else {
-        throw new Error('Could not parse AI response');
-      }
-
-    } catch (aiError) {
-      console.error('AI vision analysis error:', aiError);
-      const errorMessage = aiError instanceof Error ? aiError.message : 'Unknown error';
-      console.error(`Analysis failed: ${errorMessage}`);
-      
-      // Fallback to conservative prediction
-      prediction = 'normal';
-      confidence = 70;
-      console.log('Using fallback prediction due to analysis error');
-    }
+    console.log('Image uploaded successfully, returning placeholder for client-side inference');
+    
+    // Return success - the client will handle the actual model inference
+    const prediction: string = 'pending';
+    const confidence: number = 0;
 
     // Store detection result in database
     const { data: detectionData, error: dbError } = await supabase

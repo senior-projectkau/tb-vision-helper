@@ -45,7 +45,7 @@ const Index = () => {
     return null;
   }
 
-  const handleImageUpload = async (file: File) => {
+  const handleImageUpload = async (file: File, prediction: string, confidence: number) => {
     if (!session) {
       toast({
         title: "Authentication Required",
@@ -58,10 +58,12 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
-      console.log('Starting TB detection analysis...');
+      console.log('Uploading analyzed result to server...');
       
       const formData = new FormData();
       formData.append('image', file);
+      formData.append('prediction', prediction);
+      formData.append('confidence', confidence.toString());
 
       const response = await supabase.functions.invoke('tb-detection', {
         body: formData,
@@ -71,34 +73,32 @@ const Index = () => {
       });
 
       if (response.error) {
-        console.error('Detection error:', response.error);
-        throw response.error;
+        console.error('Upload error:', response.error);
       }
 
-      if (response.data) {
-        console.log('Detection completed:', response.data);
-        setResult({
-          prediction: response.data.prediction,
-          confidence: response.data.confidence,
-          image: URL.createObjectURL(file)
-        });
-        toast({
-          title: "Analysis Complete",
-          description: `Detection: ${response.data.prediction} (${response.data.confidence}% confidence)`,
-        });
-      }
-    } catch (error) {
-      console.error('Error during TB detection:', error);
-      // Fallback to mock result if API fails
-      const mockResult: DetectionResult = {
-        prediction: Math.random() > 0.7 ? 'tuberculosis' : 'normal',
-        confidence: Math.floor(Math.random() * 30) + 70,
+      // Show result regardless of upload success
+      setResult({
+        prediction: prediction as 'normal' | 'tuberculosis',
+        confidence: confidence,
         image: URL.createObjectURL(file)
-      };
-      setResult(mockResult);
+      });
+      
       toast({
-        title: "Analysis Complete (Demo Mode)",
-        description: `Detection: ${mockResult.prediction} (${mockResult.confidence}% confidence)`,
+        title: "Analysis Complete",
+        description: `Detection: ${prediction} (${confidence}% confidence)`,
+      });
+      
+    } catch (error) {
+      console.error('Error during TB detection upload:', error);
+      // Still show result even if upload fails
+      setResult({
+        prediction: prediction as 'normal' | 'tuberculosis',
+        confidence: confidence,
+        image: URL.createObjectURL(file)
+      });
+      toast({
+        title: "Analysis Complete",
+        description: `Detection: ${prediction} (${confidence}% confidence)`,
         variant: "default"
       });
     } finally {
