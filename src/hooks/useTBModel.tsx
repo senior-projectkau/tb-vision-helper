@@ -18,44 +18,35 @@ export const useTBModel = () => {
         console.log('Loading TB detection model from storage...');
         console.log('Expected file size: ~44.7 MB');
         
-        // Use authenticated download method - this works as shown in network logs
-        const { data, error } = await supabase.storage
-          .from('tb-models')
-          .download('tb_model1.onnx');
-
-        if (error) {
-          console.error('Storage download error:', error);
-          throw new Error(`Storage error: ${error.message}`);
+        // Use direct public URL since bucket is public
+        const modelUrl = 'https://fxndgbdmgvfheucntkbi.supabase.co/storage/v1/object/public/tb-models/tb_model1.onnx';
+        console.log('Fetching model from:', modelUrl);
+        
+        const response = await fetch(modelUrl);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        if (!data) {
-          throw new Error('No model data received from storage');
-        }
-
-        console.log(`Model blob received: ${data.size} bytes (${(data.size / 1024 / 1024).toFixed(2)} MB), type: ${data.type}`);
+        const arrayBuffer = await response.arrayBuffer();
+        console.log(`Model downloaded: ${arrayBuffer.byteLength} bytes (${(arrayBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
 
         // Verify file size is reasonable (should be ~44.7 MB)
-        if (data.size < 1000000) {
-          throw new Error(`Model file too small: ${data.size} bytes - may be corrupted`);
+        if (arrayBuffer.byteLength < 1000000) {
+          throw new Error(`Model file too small: ${arrayBuffer.byteLength} bytes - may be corrupted`);
         }
 
-        // Convert to ArrayBuffer and verify it's binary ONNX format
-        const arrayBuffer = await data.arrayBuffer();
+        // Verify it's binary ONNX format
         const firstBytes = new Uint8Array(arrayBuffer.slice(0, 4));
         const magicWord = Array.from(firstBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
         console.log(`First 4 bytes (magic word): ${magicWord}`);
         
         // Check for HTML (starts with '<' = 0x3c)
         if (firstBytes[0] === 0x3c) {
-          throw new Error('Received HTML instead of ONNX model file - storage access issue');
+          throw new Error('Received HTML instead of ONNX model file');
         }
 
-        // ONNX/Protobuf files typically start with 0x08
-        if (firstBytes[0] !== 0x08) {
-          console.warn('Unexpected magic word - expected ONNX format starting with 0x08');
-        }
-
-        console.log(`✓ Valid model file confirmed: ${arrayBuffer.byteLength} bytes`);
+        console.log(`✓ Valid ONNX model file confirmed`);
 
         // Create inference session
         console.log('Creating ONNX inference session...');
