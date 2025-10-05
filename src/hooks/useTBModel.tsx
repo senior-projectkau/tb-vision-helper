@@ -17,22 +17,34 @@ export const useTBModel = () => {
       try {
         console.log('Loading TB detection model from storage...');
         
-        // Get the public URL for the model
-        const { data: urlData } = supabase.storage
+        // Use authenticated download to bypass any access issues
+        const { data, error } = await supabase.storage
           .from('tb-models')
-          .getPublicUrl('tb_model1.onnx');
+          .download('tb_model1.onnx');
 
-        console.log('Model URL:', urlData.publicUrl);
-
-        // Fetch the model file
-        const response = await fetch(urlData.publicUrl);
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch model: ${response.status} ${response.statusText}`);
+        if (error) {
+          console.error('Error downloading model:', error);
+          throw new Error(`Storage error: ${error.message}`);
         }
 
-        const arrayBuffer = await response.arrayBuffer();
-        console.log(`Model downloaded: ${arrayBuffer.byteLength} bytes`);
+        if (!data) {
+          throw new Error('No model data received from storage');
+        }
+
+        console.log(`Model blob received: ${data.size} bytes, type: ${data.type}`);
+
+        // Verify it's actually a binary file, not HTML
+        const arrayBuffer = await data.arrayBuffer();
+        const firstBytes = new Uint8Array(arrayBuffer.slice(0, 4));
+        const magicWord = Array.from(firstBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+        console.log(`First 4 bytes (magic word): ${magicWord}`);
+        
+        // ONNX files should start with "08 00 00 00" or similar
+        if (firstBytes[0] === 0x3c) { // '<' character indicates HTML
+          throw new Error('Received HTML instead of ONNX model file');
+        }
+
+        console.log(`Valid model file: ${arrayBuffer.byteLength} bytes`);
 
         // Create inference session
         console.log('Creating ONNX inference session...');
@@ -50,7 +62,9 @@ export const useTBModel = () => {
         setModelError(null);
       } catch (error) {
         console.error('Failed to load model:', error);
-        setModelError(error instanceof Error ? error.message : 'Failed to load model');
+        const errorMsg = error instanceof Error ? error.message : 'Failed to load model';
+        console.error('Full error:', errorMsg);
+        setModelError(errorMsg);
         setIsModelLoading(false);
       }
     };
