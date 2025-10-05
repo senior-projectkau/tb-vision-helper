@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import * as ort from 'https://esm.sh/onnxruntime-web@1.17.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -43,20 +42,58 @@ serve(async (req) => {
 
     console.log(`Processing request for user: ${user.id}`);
 
-    const formData = await req.formData();
-    const imageFile = formData.get('image') as File;
+    // Get request body - can be either FormData (image upload) or JSON (prediction results)
+    const contentType = req.headers.get('content-type') || '';
     
-    if (!imageFile) {
-      return new Response(JSON.stringify({ error: 'No image file provided' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    let imageFile: File | null = null;
+    let prediction: string;
+    let confidence: number;
+    let fileName: string;
+    
+    if (contentType.includes('multipart/form-data')) {
+      // Legacy: Image upload with prediction
+      const formData = await req.formData();
+      imageFile = formData.get('image') as File;
+      prediction = formData.get('prediction') as string || 'unknown';
+      confidence = parseInt(formData.get('confidence') as string || '0');
+      
+      if (!imageFile) {
+        return new Response(JSON.stringify({ error: 'No image file provided' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      fileName = `${Date.now()}-${imageFile.name}`;
+      console.log(`Processing image: ${imageFile.name}, size: ${imageFile.size} bytes`);
+    } else {
+      // New: JSON with image data and prediction results
+      const body = await req.json();
+      
+      if (!body.imageData || !body.prediction || body.confidence === undefined) {
+        return new Response(JSON.stringify({ 
+          error: 'Missing required fields: imageData, prediction, confidence' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Convert base64 to blob
+      const base64Data = body.imageData.split(',')[1];
+      const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      imageFile = new File([binaryData], body.fileName || 'xray.png', { 
+        type: body.imageData.split(';')[0].split(':')[1] 
       });
+      
+      prediction = body.prediction;
+      confidence = body.confidence;
+      fileName = `${Date.now()}-${body.fileName || 'xray.png'}`;
+      
+      console.log(`Saving detection result: ${prediction} with ${confidence}% confidence`);
     }
 
-    console.log(`Processing image: ${imageFile.name}, size: ${imageFile.size} bytes`);
-
     // Upload image to Supabase Storage
-    const fileName = `${Date.now()}-${imageFile.name}`;
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('xray-uploads')
       .upload(fileName, imageFile);
@@ -67,107 +104,6 @@ serve(async (req) => {
     }
 
     console.log(`Image uploaded successfully: ${fileName}`);
-
-    // Initialize prediction variables
-    let prediction: string = 'normal';
-    let confidence: number = 75;
-
-    console.log('Loading TB detection model from storage...');
-    
-    try {
-      // Download the ONNX model from storage
-      const { data: modelData, error: modelError } = await supabase.storage
-        .from('tb-models')
-        .download('tb_model1.onnx');
-      
-      if (modelError) {
-        console.error('Error loading model:', modelError);
-        throw modelError;
-      }
-
-      console.log(`Model loaded successfully: ${modelData.size} bytes`);
-      
-      // Get the uploaded image for processing
-      const { data: imageData, error: imageError } = await supabase.storage
-        .from('xray-uploads')
-        .download(fileName);
-      
-      if (imageError) {
-        console.error('Error downloading uploaded image:', imageError);
-        throw imageError;
-      }
-
-      console.log('Preprocessing image for model inference...');
-      
-      // Convert image to ArrayBuffer
-      const imageBuffer = await imageData.arrayBuffer();
-      const imageArray = new Uint8Array(imageBuffer);
-      
-      // Create ONNX inference session
-      const modelBuffer = await modelData.arrayBuffer();
-      const session = await ort.InferenceSession.create(modelBuffer);
-      
-      console.log('ONNX model loaded, input names:', session.inputNames);
-      console.log('ONNX model output names:', session.outputNames);
-      
-      // Preprocess image: resize to 224x224 and normalize
-      // This is a simplified preprocessing - in production you'd use proper image processing
-      const tensorData = new Float32Array(1 * 3 * 224 * 224);
-      
-      // Fill with normalized values (simplified - assumes grayscale X-ray)
-      for (let i = 0; i < tensorData.length; i++) {
-        tensorData[i] = (imageArray[i % imageArray.length] / 255.0 - 0.5) / 0.5;
-      }
-      
-      const inputTensor = new ort.Tensor('float32', tensorData, [1, 3, 224, 224]);
-      
-      // Run inference
-      console.log('Running model inference...');
-      const feeds = { [session.inputNames[0]]: inputTensor };
-      const results = await session.run(feeds);
-      
-      // Get output tensor
-      const outputTensor = results[session.outputNames[0]];
-      const outputData = outputTensor.data as Float32Array;
-      
-      console.log('Model output:', outputData);
-      
-      // Interpret results (assuming binary classification: [normal, tuberculosis])
-      const normalScore = outputData[0];
-      const tbScore = outputData[1];
-      
-      // Apply softmax to get probabilities
-      const expNormal = Math.exp(normalScore);
-      const expTB = Math.exp(tbScore);
-      const sumExp = expNormal + expTB;
-      
-      const normalProb = expNormal / sumExp;
-      const tbProb = expTB / sumExp;
-      
-      console.log(`Probabilities - Normal: ${(normalProb * 100).toFixed(2)}%, TB: ${(tbProb * 100).toFixed(2)}%`);
-      
-      // Determine prediction
-      if (tbProb > normalProb) {
-        prediction = 'tuberculosis';
-        confidence = Math.round(tbProb * 100);
-      } else {
-        prediction = 'normal';
-        confidence = Math.round(normalProb * 100);
-      }
-      
-      console.log(`Model prediction: ${prediction} with ${confidence}% confidence`);
-
-    } catch (modelError) {
-      console.error('Error in TB detection analysis:', modelError);
-      
-      return new Response(JSON.stringify({ 
-        error: 'Model error: Failed to perform TB detection analysis',
-        details: modelError instanceof Error ? modelError.message : 'Unknown model error'
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     // Store detection result in database
     const { data: detectionData, error: dbError } = await supabase

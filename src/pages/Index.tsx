@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTBDetection } from '@/hooks/useTBDetection';
 import { FileUpload } from "@/components/FileUpload";
 import { ResultsDisplay } from "@/components/ResultsDisplay";
 import { TBChatbot } from "@/components/TBChatbot";
@@ -24,6 +25,7 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const { user, session, loading, signOut } = useAuth();
+  const { detectTB, loadModel, isLoading: modelLoading, error: modelError, modelLoaded } = useTBDetection();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -32,6 +34,20 @@ const Index = () => {
       navigate('/auth');
     }
   }, [user, loading, navigate]);
+
+  // Load the TB detection model when component mounts
+  useEffect(() => {
+    if (user && !modelLoaded && !modelLoading) {
+      loadModel().catch(err => {
+        console.error('Failed to load TB model:', err);
+        toast({
+          title: "Model Loading Error",
+          description: "Failed to load the TB detection model. Please refresh the page.",
+          variant: "destructive"
+        });
+      });
+    }
+  }, [user, modelLoaded, modelLoading, loadModel, toast]);
 
   if (loading) {
     return (
@@ -55,51 +71,66 @@ const Index = () => {
       return;
     }
 
+    if (!modelLoaded) {
+      toast({
+        title: "Model Not Ready",
+        description: "Please wait for the AI model to finish loading...",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     
     try {
-      console.log('Starting TB detection analysis...');
+      console.log('Starting TB detection analysis in browser...');
       
-      const formData = new FormData();
-      formData.append('image', file);
-
+      // Step 1: Run AI detection in the browser
+      const detectionResult = await detectTB(file);
+      console.log('Browser detection result:', detectionResult);
+      
+      // Step 2: Convert image to base64 for storage
+      const reader = new FileReader();
+      const imageData = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      // Step 3: Save results to database via edge function
       const response = await supabase.functions.invoke('tb-detection', {
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
+        body: {
+          imageData,
+          fileName: file.name,
+          prediction: detectionResult.prediction,
+          confidence: detectionResult.confidence
         }
       });
 
       if (response.error) {
-        console.error('Detection error:', response.error);
+        console.error('Storage error:', response.error);
         throw response.error;
       }
 
-      if (response.data) {
-        console.log('Detection completed:', response.data);
-        setResult({
-          prediction: response.data.prediction,
-          confidence: response.data.confidence,
-          image: URL.createObjectURL(file)
-        });
-        toast({
-          title: "Analysis Complete",
-          description: `Detection: ${response.data.prediction} (${response.data.confidence}% confidence)`,
-        });
-      }
+      console.log('Detection saved:', response.data);
+      
+      // Step 4: Display results
+      setResult({
+        prediction: detectionResult.prediction,
+        confidence: detectionResult.confidence,
+        image: URL.createObjectURL(file)
+      });
+      
+      toast({
+        title: "Analysis Complete",
+        description: `Detection: ${detectionResult.prediction} (${detectionResult.confidence}% confidence)`,
+      });
     } catch (error) {
       console.error('Error during TB detection:', error);
-      // Fallback to mock result if API fails
-      const mockResult: DetectionResult = {
-        prediction: Math.random() > 0.7 ? 'tuberculosis' : 'normal',
-        confidence: Math.floor(Math.random() * 30) + 70,
-        image: URL.createObjectURL(file)
-      };
-      setResult(mockResult);
       toast({
-        title: "Analysis Complete (Demo Mode)",
-        description: `Detection: ${mockResult.prediction} (${mockResult.confidence}% confidence)`,
-        variant: "default"
+        title: "Detection Failed",
+        description: error instanceof Error ? error.message : "Failed to analyze the image",
+        variant: "destructive"
       });
     } finally {
       setIsAnalyzing(false);
