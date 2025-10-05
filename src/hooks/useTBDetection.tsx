@@ -33,16 +33,12 @@ export const useTBDetection = () => {
       const modelBuffer = await response.arrayBuffer();
       console.log(`Model downloaded: ${modelBuffer.byteLength} bytes`);
       
-      // Verify it's an ONNX file (check magic word)
-      const view = new Uint8Array(modelBuffer, 0, 4);
-      const magicWord = Array.from(view).map(b => b.toString(16).padStart(2, '0')).join(' ');
-      console.log('File magic word:', magicWord);
+      // Log first few bytes for debugging (PyTorch ONNX models have different headers)
+      const view = new Uint8Array(modelBuffer, 0, 16);
+      const header = Array.from(view).map(b => b.toString(16).padStart(2, '0')).join(' ');
+      console.log('Model file header:', header);
       
-      if (view[0] !== 0x08 || view[1] !== 0x03 || view[2] !== 0x12 || view[3] !== 0x07) {
-        throw new Error('Invalid ONNX model file format');
-      }
-      
-      // Create ONNX Runtime session
+      // Create ONNX Runtime session (it will validate the format)
       console.log('Creating ONNX inference session...');
       const ortSession = await ort.InferenceSession.create(modelBuffer);
       
