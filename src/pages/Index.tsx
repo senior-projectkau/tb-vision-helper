@@ -33,6 +33,26 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    if (isModelLoading) {
+      toast({
+        title: "Loading AI Model",
+        description: "Downloading TB detection model from cloud storage...",
+      });
+    } else if (modelError) {
+      toast({
+        title: "Model Error",
+        description: modelError,
+        variant: "destructive"
+      });
+    } else if (!isModelLoading && !modelError) {
+      toast({
+        title: "Model Ready",
+        description: "AI model loaded successfully. Ready to analyze X-rays.",
+      });
+    }
+  }, [isModelLoading, modelError, toast]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-secondary flex items-center justify-center">
