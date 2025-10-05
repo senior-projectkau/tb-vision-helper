@@ -20,15 +20,27 @@ export const useTBModel = () => {
     try {
       console.log('Loading ONNX model from Supabase storage...');
       
-      // Get the public URL for the model
-      const { data } = supabase.storage
+      // Download the model file directly
+      const { data: modelBlob, error: downloadError } = await supabase.storage
         .from('tb-models')
-        .getPublicUrl('tb_model1.onnx');
+        .download('tb_model1.onnx');
 
-      console.log('Model URL:', data.publicUrl);
+      if (downloadError) {
+        throw new Error(`Failed to download model: ${downloadError.message}`);
+      }
 
-      // Load the ONNX model
-      const session = await ort.InferenceSession.create(data.publicUrl, {
+      if (!modelBlob) {
+        throw new Error('Model file not found in storage');
+      }
+
+      console.log('Model downloaded successfully, size:', modelBlob.size, 'bytes');
+
+      // Convert blob to ArrayBuffer
+      const arrayBuffer = await modelBlob.arrayBuffer();
+      console.log('Model converted to ArrayBuffer');
+
+      // Load the ONNX model from ArrayBuffer
+      const session = await ort.InferenceSession.create(arrayBuffer, {
         executionProviders: ['wasm'],
       });
 
