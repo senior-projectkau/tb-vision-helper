@@ -1,7 +1,11 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { HfInference } from 'https://esm.sh/@huggingface/inference@2.3.2';
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.3';
+
+// Configure transformers.js for Deno
+env.allowLocalModels = false;
+env.useBrowserCache = false;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,22 +72,27 @@ serve(async (req) => {
 
     console.log(`Image uploaded successfully: ${fileName}`);
 
-    // Initialize Hugging Face client with your trained model
-    const hfToken = Deno.env.get('HUGGING_FACE_ACCESS_TOKEN');
-    if (!hfToken) {
-      throw new Error('HUGGING_FACE_ACCESS_TOKEN not configured');
-    }
-
-    const hf = new HfInference(hfToken);
-    
     // Initialize prediction variables
     let prediction: string = 'normal';
     let confidence: number = 0;
 
-    console.log('Using your trained TB detection model from Hugging Face...');
+    console.log('Loading your TB detection model from Supabase Storage...');
     
     try {
-      // Get the uploaded image for processing
+      // Download the ONNX model from Supabase Storage
+      const modelFileName = 'tb_model1.onnx';
+      const { data: modelData, error: modelError } = await supabase.storage
+        .from('tb-models')
+        .download(modelFileName);
+      
+      if (modelError) {
+        console.error('Error downloading model:', modelError);
+        throw new Error(`Failed to load model: ${modelError.message}`);
+      }
+
+      console.log('Model downloaded successfully, initializing inference pipeline...');
+
+      // Get the uploaded X-ray image
       const { data: imageData, error: imageError } = await supabase.storage
         .from('xray-uploads')
         .download(fileName);
@@ -93,33 +102,29 @@ serve(async (req) => {
         throw imageError;
       }
 
-      console.log('Sending X-ray to your trained model for analysis...');
+      console.log('Running inference on X-ray image...');
       
-      // Convert image blob to ArrayBuffer for Hugging Face API
-      const imageBuffer = await imageData.arrayBuffer();
-      const imageBlob = new Blob([imageBuffer], { type: imageFile.type });
-      
-      // Call your trained model on Hugging Face
-      // Using the custom ONNX model at: yazeedfahaddd22/tb-detection-onnx
-      const result = await hf.imageClassification({
-        data: imageBlob,
-        model: 'yazeedfahaddd22/tb-detection-onnx',
+      // Create image classification pipeline with your custom model
+      const classifier = await pipeline('image-classification', modelData, {
+        dtype: 'fp32',
       });
+      
+      // Run inference
+      const result = await classifier(imageData);
       
       console.log('Model inference completed:', JSON.stringify(result));
       
-      // Parse the results from your trained model
-      // The model returns classification scores
+      // Parse results - expecting array of [{label: string, score: number}]
       if (result && result.length > 0) {
         // Find tuberculosis and normal predictions
-        const tbResult = result.find(r => 
+        const tbResult = result.find((r: any) => 
           r.label.toLowerCase().includes('tuberculosis') || 
           r.label.toLowerCase().includes('tb') ||
           r.label === '1' || 
           r.label === 'positive'
         );
         
-        const normalResult = result.find(r => 
+        const normalResult = result.find((r: any) => 
           r.label.toLowerCase().includes('normal') || 
           r.label === '0' || 
           r.label === 'negative'
@@ -133,12 +138,12 @@ serve(async (req) => {
         prediction = isTuberculosis ? 'tuberculosis' : 'normal';
         confidence = Math.round(Math.max(tbScore, normalScore) * 100);
         
-        console.log(`Your Model Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
+        console.log(`Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
       } else {
         throw new Error('No classification results returned from model');
       }
       
-      console.log(`TB detection complete using your trained model: ${prediction} with ${confidence}% confidence`);
+      console.log(`TB detection complete: ${prediction} with ${confidence}% confidence`);
 
     } catch (modelError) {
       console.error('Error in TB detection analysis:', modelError);
