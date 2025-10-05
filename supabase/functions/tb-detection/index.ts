@@ -160,10 +160,13 @@ serve(async (req) => {
     } catch (modelError) {
       console.error('Error in TB detection analysis:', modelError);
       
-      // Fallback to basic analysis
-      prediction = 'normal';
-      confidence = 70;
-      console.log('Fallback: Using default prediction due to model error');
+      return new Response(JSON.stringify({ 
+        error: 'Model error: Failed to perform TB detection analysis',
+        details: modelError instanceof Error ? modelError.message : 'Unknown model error'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Store detection result in database
