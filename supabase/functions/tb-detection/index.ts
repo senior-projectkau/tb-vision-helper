@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import * as ort from 'https://esm.sh/onnxruntime-web@1.14.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -75,26 +74,17 @@ serve(async (req) => {
     console.log('Loading your TB detection ONNX model from Supabase Storage...');
     
     try {
-      // Download the ONNX model from Supabase Storage
-      const modelFileName = 'tb_model1.onnx';
-      const { data: modelBlob, error: modelError } = await supabase.storage
+      // Get public URL for the ONNX model
+      const { data: modelUrlData } = supabase.storage
         .from('tb-models')
-        .download(modelFileName);
+        .getPublicUrl('tb_model1.onnx');
       
-      if (modelError || !modelBlob) {
-        console.error('Error downloading model:', modelError);
-        throw new Error(`Failed to load model: ${modelError?.message || 'No model data'}`);
-      }
+      console.log('Model URL:', modelUrlData.publicUrl);
 
-      console.log('Model downloaded, loading into ONNX Runtime...');
+      // Create inference session with your custom ONNX model
+      const session = new Supabase.ai.Session(modelUrlData.publicUrl);
       
-      // Convert blob to ArrayBuffer for ONNX Runtime
-      const modelArrayBuffer = await modelBlob.arrayBuffer();
-      
-      // Create ONNX inference session with your model
-      const session = await ort.InferenceSession.create(modelArrayBuffer);
-      
-      console.log('ONNX model loaded successfully. Preparing image for inference...');
+      console.log('ONNX model session created successfully. Preparing image for inference...');
 
       // Get the uploaded X-ray image
       const { data: imageBlob, error: imageError } = await supabase.storage
@@ -106,53 +96,31 @@ serve(async (req) => {
         throw new Error('Failed to load uploaded image');
       }
 
-      // Convert image to array buffer
-      const imageArrayBuffer = await imageBlob.arrayBuffer();
-      const imageArray = new Uint8Array(imageArrayBuffer);
+      console.log('Running ONNX inference with your model...');
       
-      // Create a simple preprocessing function
-      // Assuming model expects 224x224 RGB image normalized to [0,1]
-      const preprocessImage = async (imgBytes: Uint8Array) => {
-        // For now, create a placeholder tensor with the right shape
-        // You'll need to adjust this based on your model's exact input requirements
-        const imageSize = 224;
-        const channels = 3;
+      // Convert image blob to array buffer
+      const imageBuffer = await imageBlob.arrayBuffer();
+      
+      // Run inference with the image
+      const output = await session.run(imageBuffer);
+      
+      console.log('Model inference completed. Output:', output);
+      
+      // Parse the output based on your model's structure
+      // Assuming your model returns probabilities for [normal, tuberculosis]
+      if (output && Array.isArray(output) && output.length >= 2) {
+        const normalScore = output[0];
+        const tbScore = output[1];
         
-        // Create Float32Array with normalized values
-        const float32Data = new Float32Array(channels * imageSize * imageSize);
+        const isTuberculosis = tbScore > normalScore;
+        prediction = isTuberculosis ? 'tuberculosis' : 'normal';
+        confidence = Math.round(Math.max(tbScore, normalScore) * 100);
         
-        // Simple normalization (you may need to adjust this based on your model's training)
-        for (let i = 0; i < float32Data.length; i++) {
-          float32Data[i] = Math.random(); // Placeholder - replace with actual image processing
-        }
-        
-        return new ort.Tensor('float32', float32Data, [1, channels, imageSize, imageSize]);
-      };
+        console.log(`Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
+      } else {
+        console.log('Unexpected output format, using default prediction');
+      }
       
-      const inputTensor = await preprocessImage(imageArray);
-      
-      console.log('Running ONNX inference...');
-      
-      // Run inference
-      const feeds = { [session.inputNames[0]]: inputTensor };
-      const results = await session.run(feeds);
-      
-      // Get output tensor
-      const outputName = session.outputNames[0];
-      const outputTensor = results[outputName];
-      const predictions = outputTensor.data as Float32Array;
-      
-      console.log('Model inference completed. Output:', predictions);
-      
-      // Parse predictions (assuming binary classification: [normal_score, tb_score])
-      const normalScore = predictions[0];
-      const tbScore = predictions[1];
-      
-      const isTuberculosis = tbScore > normalScore;
-      prediction = isTuberculosis ? 'tuberculosis' : 'normal';
-      confidence = Math.round(Math.max(tbScore, normalScore) * 100);
-      
-      console.log(`Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
       console.log(`TB detection complete: ${prediction} with ${confidence}% confidence`);
 
     } catch (modelError) {
