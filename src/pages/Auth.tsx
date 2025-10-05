@@ -100,24 +100,35 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-medical-primary via-medical-accent to-medical-secondary flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary via-primary-light to-primary-dark flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-primary-foreground rounded-full blur-3xl opacity-20 -translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-primary-foreground rounded-full blur-3xl opacity-20 translate-x-1/2 translate-y-1/2"></div>
+      </div>
+      
+      <div className="w-full max-w-md space-y-8 relative z-10">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center space-x-2">
-            <div className="bg-white/20 p-3 rounded-full">
-              <Stethoscope className="w-8 h-8 text-white" />
+        <div className="text-center space-y-6">
+          <div className="flex items-center justify-center space-x-3">
+            <div className="bg-primary-foreground/15 backdrop-blur-sm p-4 rounded-full border border-primary-foreground/20 shadow-glow">
+              <Stethoscope className="w-10 h-10 text-primary-foreground drop-shadow-sm" />
             </div>
-            <h1 className="text-3xl font-bold text-white">TB Detection</h1>
+            <div className="space-y-1">
+              <h1 className="text-4xl font-bold text-primary-foreground drop-shadow-lg tracking-tight">TB Detection</h1>
+              <div className="h-1 w-20 bg-primary-foreground/30 rounded-full mx-auto"></div>
+            </div>
           </div>
-          <p className="text-white/80">Secure medical imaging analysis platform</p>
+          <p className="text-primary-foreground/90 text-lg font-medium drop-shadow-sm">
+            Advanced Medical Imaging Analysis Platform
+          </p>
         </div>
 
-        <Card className="bg-white/95 backdrop-blur-sm border-0 shadow-2xl">
+        <Card className="bg-card/95 backdrop-blur-sm border-0 shadow-2xl">
           <CardHeader className="text-center pb-4">
             <div className="flex items-center justify-center space-x-2 mb-2">
-              <Shield className="w-5 h-5 text-medical-primary" />
-              <CardTitle className="text-medical-primary">Secure Access</CardTitle>
+              <Shield className="w-5 h-5 text-primary" />
+              <CardTitle className="text-primary">Secure Access</CardTitle>
             </div>
             <CardDescription>
               Protected health information requires authentication
@@ -140,37 +151,43 @@ export default function Auth() {
               <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="signin-email">Email</Label>
                     <Input
-                      id="email"
+                      id="signin-email"
+                      name="email"
                       type="email"
                       placeholder="doctor@hospital.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       disabled={isLoading}
+                      className="transition-medical focus:ring-2 focus:ring-primary"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="signin-password">Password</Label>
                     <Input
-                      id="password"
+                      id="signin-password"
+                      name="password"
                       type="password"
+                      placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       disabled={isLoading}
+                      minLength={6}
+                      className="transition-medical focus:ring-2 focus:ring-primary"
                     />
                   </div>
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-medical-primary hover:bg-medical-primary/90"
-                    disabled={isLoading}
+                    className="w-full bg-primary hover:bg-primary-dark text-primary-foreground font-semibold py-3 transition-smooth transform hover:scale-[1.02] border-0 shadow-medical"
+                    disabled={isLoading || !email || !password}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign In
+                    {isLoading ? 'Signing In...' : 'Sign In with Email & Password'}
                   </Button>
                 </form>
               </TabsContent>
@@ -178,35 +195,40 @@ export default function Auth() {
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="signup-name">Full Name</Label>
                     <Input
-                      id="fullName"
+                      id="signup-name"
+                      name="fullName"
                       type="text"
                       placeholder="Dr. John Smith"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
                       disabled={isLoading}
+                      className="transition-medical focus:ring-2 focus:ring-primary"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="signup-email">Email</Label>
                     <Input
-                      id="email"
+                      id="signup-email"
+                      name="email"
                       type="email"
                       placeholder="doctor@hospital.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       disabled={isLoading}
+                      className="transition-medical focus:ring-2 focus:ring-primary"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="signup-password">Password</Label>
                     <Input
-                      id="password"
+                      id="signup-password"
+                      name="password"
                       type="password"
                       placeholder="Minimum 6 characters"
                       value={password}
@@ -214,23 +236,24 @@ export default function Auth() {
                       required
                       minLength={6}
                       disabled={isLoading}
+                      className="transition-medical focus:ring-2 focus:ring-primary"
                     />
                   </div>
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-medical-primary hover:bg-medical-primary/90"
-                    disabled={isLoading}
+                    className="w-full bg-success hover:bg-success/90 text-success-foreground font-semibold py-3 transition-smooth transform hover:scale-[1.02] border-0 shadow-medical"
+                    disabled={isLoading || !email || !password || !fullName}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Account
+                    {isLoading ? 'Creating Account...' : 'Create Account with Email & Password'}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
 
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <div className="text-sm text-gray-600 text-center space-y-1">
+            <div className="mt-6 pt-4 border-t border-muted">
+              <div className="text-sm text-muted-foreground text-center space-y-1">
                 <p className="flex items-center justify-center space-x-1">
                   <Shield className="w-4 h-4" />
                   <span>HIPAA Compliant Platform</span>
