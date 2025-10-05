@@ -17,24 +17,34 @@ export const useTBModel = () => {
       try {
         console.log('Loading TB detection model from storage...');
         
-        // Use authenticated download to bypass any access issues
-        const { data, error } = await supabase.storage
+        // Create a signed URL for secure access
+        const { data: signedUrlData, error: urlError } = await supabase.storage
           .from('tb-models')
-          .download('tb_model1.onnx');
+          .createSignedUrl('tb_model1.onnx', 3600); // 1 hour expiry
 
-        if (error) {
-          console.error('Error downloading model:', error);
-          throw new Error(`Storage error: ${error.message}`);
+        if (urlError || !signedUrlData) {
+          console.error('Error creating signed URL:', urlError);
+          throw new Error(`Storage URL error: ${urlError?.message || 'No URL returned'}`);
         }
 
-        if (!data) {
-          throw new Error('No model data received from storage');
+        console.log('Fetching model from signed URL...');
+
+        // Fetch with explicit headers
+        const response = await fetch(signedUrlData.signedUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/octet-stream',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        console.log(`Model blob received: ${data.size} bytes, type: ${data.type}`);
+        const arrayBuffer = await response.arrayBuffer();
+        console.log(`Model downloaded: ${arrayBuffer.byteLength} bytes`);
 
         // Verify it's actually a binary file, not HTML
-        const arrayBuffer = await data.arrayBuffer();
         const firstBytes = new Uint8Array(arrayBuffer.slice(0, 4));
         const magicWord = Array.from(firstBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
         console.log(`First 4 bytes (magic word): ${magicWord}`);
@@ -44,7 +54,7 @@ export const useTBModel = () => {
           throw new Error('Received HTML instead of ONNX model file');
         }
 
-        console.log(`Valid model file: ${arrayBuffer.byteLength} bytes`);
+        console.log(`Valid ONNX model file confirmed`);
 
         // Create inference session
         console.log('Creating ONNX inference session...');
