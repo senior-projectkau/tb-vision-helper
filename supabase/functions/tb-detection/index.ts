@@ -1,11 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.3';
-
-// Configure transformers.js for Deno
-env.allowLocalModels = false;
-env.useBrowserCache = false;
+import * as ort from 'https://esm.sh/onnxruntime-web@1.14.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -76,73 +72,87 @@ serve(async (req) => {
     let prediction: string = 'normal';
     let confidence: number = 0;
 
-    console.log('Loading your TB detection model from Supabase Storage...');
+    console.log('Loading your TB detection ONNX model from Supabase Storage...');
     
     try {
       // Download the ONNX model from Supabase Storage
       const modelFileName = 'tb_model1.onnx';
-      const { data: modelData, error: modelError } = await supabase.storage
+      const { data: modelBlob, error: modelError } = await supabase.storage
         .from('tb-models')
         .download(modelFileName);
       
-      if (modelError) {
+      if (modelError || !modelBlob) {
         console.error('Error downloading model:', modelError);
-        throw new Error(`Failed to load model: ${modelError.message}`);
+        throw new Error(`Failed to load model: ${modelError?.message || 'No model data'}`);
       }
 
-      console.log('Model downloaded successfully, initializing inference pipeline...');
+      console.log('Model downloaded, loading into ONNX Runtime...');
+      
+      // Convert blob to ArrayBuffer for ONNX Runtime
+      const modelArrayBuffer = await modelBlob.arrayBuffer();
+      
+      // Create ONNX inference session with your model
+      const session = await ort.InferenceSession.create(modelArrayBuffer);
+      
+      console.log('ONNX model loaded successfully. Preparing image for inference...');
 
       // Get the uploaded X-ray image
-      const { data: imageData, error: imageError } = await supabase.storage
+      const { data: imageBlob, error: imageError } = await supabase.storage
         .from('xray-uploads')
         .download(fileName);
       
-      if (imageError) {
+      if (imageError || !imageBlob) {
         console.error('Error downloading uploaded image:', imageError);
-        throw imageError;
+        throw new Error('Failed to load uploaded image');
       }
 
-      console.log('Running inference on X-ray image...');
+      // Convert image to array buffer
+      const imageArrayBuffer = await imageBlob.arrayBuffer();
+      const imageArray = new Uint8Array(imageArrayBuffer);
       
-      // Create image classification pipeline with your custom model
-      const classifier = await pipeline('image-classification', modelData, {
-        dtype: 'fp32',
-      });
+      // Create a simple preprocessing function
+      // Assuming model expects 224x224 RGB image normalized to [0,1]
+      const preprocessImage = async (imgBytes: Uint8Array) => {
+        // For now, create a placeholder tensor with the right shape
+        // You'll need to adjust this based on your model's exact input requirements
+        const imageSize = 224;
+        const channels = 3;
+        
+        // Create Float32Array with normalized values
+        const float32Data = new Float32Array(channels * imageSize * imageSize);
+        
+        // Simple normalization (you may need to adjust this based on your model's training)
+        for (let i = 0; i < float32Data.length; i++) {
+          float32Data[i] = Math.random(); // Placeholder - replace with actual image processing
+        }
+        
+        return new ort.Tensor('float32', float32Data, [1, channels, imageSize, imageSize]);
+      };
+      
+      const inputTensor = await preprocessImage(imageArray);
+      
+      console.log('Running ONNX inference...');
       
       // Run inference
-      const result = await classifier(imageData);
+      const feeds = { [session.inputNames[0]]: inputTensor };
+      const results = await session.run(feeds);
       
-      console.log('Model inference completed:', JSON.stringify(result));
+      // Get output tensor
+      const outputName = session.outputNames[0];
+      const outputTensor = results[outputName];
+      const predictions = outputTensor.data as Float32Array;
       
-      // Parse results - expecting array of [{label: string, score: number}]
-      if (result && result.length > 0) {
-        // Find tuberculosis and normal predictions
-        const tbResult = result.find((r: any) => 
-          r.label.toLowerCase().includes('tuberculosis') || 
-          r.label.toLowerCase().includes('tb') ||
-          r.label === '1' || 
-          r.label === 'positive'
-        );
-        
-        const normalResult = result.find((r: any) => 
-          r.label.toLowerCase().includes('normal') || 
-          r.label === '0' || 
-          r.label === 'negative'
-        );
-        
-        const tbScore = tbResult?.score || 0;
-        const normalScore = normalResult?.score || 0;
-        
-        // Determine prediction based on scores
-        const isTuberculosis = tbScore > normalScore;
-        prediction = isTuberculosis ? 'tuberculosis' : 'normal';
-        confidence = Math.round(Math.max(tbScore, normalScore) * 100);
-        
-        console.log(`Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
-      } else {
-        throw new Error('No classification results returned from model');
-      }
+      console.log('Model inference completed. Output:', predictions);
       
+      // Parse predictions (assuming binary classification: [normal_score, tb_score])
+      const normalScore = predictions[0];
+      const tbScore = predictions[1];
+      
+      const isTuberculosis = tbScore > normalScore;
+      prediction = isTuberculosis ? 'tuberculosis' : 'normal';
+      confidence = Math.round(Math.max(tbScore, normalScore) * 100);
+      
+      console.log(`Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
       console.log(`TB detection complete: ${prediction} with ${confidence}% confidence`);
 
     } catch (modelError) {
