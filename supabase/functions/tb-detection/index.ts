@@ -1,8 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-// Import ONNX Runtime for actual model inference
-import * as ort from 'https://esm.sh/onnxruntime-web@1.17.0';
+import { HfInference } from 'https://esm.sh/@huggingface/inference@2.3.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,26 +68,21 @@ serve(async (req) => {
 
     console.log(`Image uploaded successfully: ${fileName}`);
 
+    // Initialize Hugging Face client with your trained model
+    const hfToken = Deno.env.get('HUGGING_FACE_ACCESS_TOKEN');
+    if (!hfToken) {
+      throw new Error('HUGGING_FACE_ACCESS_TOKEN not configured');
+    }
+
+    const hf = new HfInference(hfToken);
+    
     // Initialize prediction variables
     let prediction: string = 'normal';
-    let confidence: number = 75;
+    let confidence: number = 0;
 
-    // Load and use the actual TB detection model from storage
-    console.log('Loading TB detection model from storage...');
+    console.log('Using your trained TB detection model from Hugging Face...');
     
     try {
-      // Download the ONNX model from storage
-      const { data: modelData, error: modelError } = await supabase.storage
-        .from('tb-models')
-        .download('tb_model1.onnx');
-      
-      if (modelError) {
-        console.error('Error loading model:', modelError);
-        throw modelError;
-      }
-
-      console.log(`Model loaded successfully: ${modelData.size} bytes`);
-      
       // Get the uploaded image for processing
       const { data: imageData, error: imageError } = await supabase.storage
         .from('xray-uploads')
@@ -99,55 +93,57 @@ serve(async (req) => {
         throw imageError;
       }
 
-      // REAL ONNX MODEL INFERENCE - Using your trained tb_model1.onnx
-      const modelBuffer = await modelData.arrayBuffer();
+      console.log('Sending X-ray to your trained model for analysis...');
+      
+      // Convert image blob to ArrayBuffer for Hugging Face API
       const imageBuffer = await imageData.arrayBuffer();
+      const imageBlob = new Blob([imageBuffer], { type: imageFile.type });
       
-      console.log('Loading your trained TB model for real inference...');
+      // Call your trained model on Hugging Face
+      // Using the custom ONNX model at: yazeedfahaddd22/tb-detection-onnx
+      const result = await hf.imageClassification({
+        data: imageBlob,
+        model: 'yazeedfahaddd22/tb-detection-onnx',
+      });
       
-      try {
-        // Create ONNX Runtime session with your actual model
-        const session = await ort.InferenceSession.create(modelBuffer);
-        console.log('ONNX model session created successfully');
+      console.log('Model inference completed:', JSON.stringify(result));
+      
+      // Parse the results from your trained model
+      // The model returns classification scores
+      if (result && result.length > 0) {
+        // Find tuberculosis and normal predictions
+        const tbResult = result.find(r => 
+          r.label.toLowerCase().includes('tuberculosis') || 
+          r.label.toLowerCase().includes('tb') ||
+          r.label === '1' || 
+          r.label === 'positive'
+        );
         
-        // Preprocess the image for your model
-        // Most TB models expect 224x224 or 512x512 input
-        const imageData = await preprocessImageForModel(imageBuffer);
+        const normalResult = result.find(r => 
+          r.label.toLowerCase().includes('normal') || 
+          r.label === '0' || 
+          r.label === 'negative'
+        );
         
-        // Create input tensor for your model
-        const inputTensor = new ort.Tensor('float32', imageData, [1, 3, 224, 224]);
+        const tbScore = tbResult?.score || 0;
+        const normalScore = normalResult?.score || 0;
         
-        // Run inference with your trained model
-        const results = await session.run({ input: inputTensor });
-        
-        console.log('Model inference completed successfully');
-        
-        // Extract predictions from your model output
-        const outputTensor = results.output;
-        const predictions = outputTensor.data as Float32Array;
-        
-        // Assuming binary classification: [normal_prob, tb_prob]
-        const normalProb = predictions[0];
-        const tbProb = predictions[1];
-        
-        // Determine prediction based on your model's output
-        const isTuberculosis = tbProb > normalProb;
+        // Determine prediction based on scores
+        const isTuberculosis = tbScore > normalScore;
         prediction = isTuberculosis ? 'tuberculosis' : 'normal';
-        confidence = Math.round(Math.max(normalProb, tbProb) * 100);
+        confidence = Math.round(Math.max(tbScore, normalScore) * 100);
         
-        console.log(`Real Model Prediction: ${prediction} (TB: ${(tbProb * 100).toFixed(1)}%, Normal: ${(normalProb * 100).toFixed(1)}%)`);
-        
-      } catch (modelError) {
-        console.error('ONNX Runtime error:', modelError);
-        const errorMessage = modelError instanceof Error ? modelError.message : 'Unknown model error';
-        throw new Error(`Model inference failed: ${errorMessage}`);
+        console.log(`Your Model Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
+      } else {
+        throw new Error('No classification results returned from model');
       }
       
-      console.log(`Medical AI analysis complete: ${prediction} with ${confidence}% confidence`);
+      console.log(`TB detection complete using your trained model: ${prediction} with ${confidence}% confidence`);
 
     } catch (modelError) {
       console.error('Error in TB detection analysis:', modelError);
-      throw modelError; // Only use real model - no fallbacks
+      const errorMessage = modelError instanceof Error ? modelError.message : 'Unknown model error';
+      throw new Error(`Model inference failed: ${errorMessage}`);
     }
 
     // Store detection result in database
@@ -194,27 +190,3 @@ serve(async (req) => {
     });
   }
 });
-
-// Image preprocessing function for your TB model
-async function preprocessImageForModel(imageBuffer: ArrayBuffer): Promise<Float32Array> {
-  // Convert image to the format expected by your model
-  // This is a simplified version - you may need to adjust based on your specific model requirements
-  
-  const uint8Array = new Uint8Array(imageBuffer);
-  
-  // For a typical TB classification model, we need:
-  // 1. Resize to model input size (usually 224x224)
-  // 2. Normalize pixel values (0-1 range)  
-  // 3. Convert to RGB format
-  
-  // Simplified preprocessing - in practice, you'd use image processing library
-  const imageSize = 224 * 224 * 3; // 224x224 RGB
-  const processedData = new Float32Array(imageSize);
-  
-  // Basic normalization (this is simplified - real preprocessing would handle image decoding)
-  for (let i = 0; i < Math.min(imageSize, uint8Array.length); i++) {
-    processedData[i] = uint8Array[i] / 255.0; // Normalize to 0-1
-  }
-  
-  return processedData;
-}
