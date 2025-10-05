@@ -19,6 +19,9 @@ export const useTBDetection = () => {
       
       console.log('Loading TB detection model from storage...');
       
+      // Configure ONNX Runtime to use CDN for WASM files
+      ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.0/dist/';
+      
       // Get the public URL of the model
       const modelUrl = 'https://fxndgbdmgvfheucntkbi.supabase.co/storage/v1/object/public/tb-models/tb_model1.onnx';
       
