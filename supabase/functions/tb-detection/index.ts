@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import * as ort from 'https://esm.sh/onnxruntime-web@1.17.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,87 +71,108 @@ serve(async (req) => {
     let prediction: string = 'normal';
     let confidence: number = 75;
 
-    console.log('Starting TB detection with ONNX model...');
+    console.log('Starting TB detection with AI vision analysis...');
     
     try {
-      // Download the ONNX model
-      const { data: modelData, error: modelError } = await supabase.storage
-        .from('tb-models')
-        .download('tb_model1.onnx');
-      
-      if (modelError) throw modelError;
-      console.log(`Model downloaded: ${modelData.size} bytes`);
-
       // Download the uploaded image
       const { data: imageData, error: imageError } = await supabase.storage
         .from('xray-uploads')
         .download(fileName);
       
       if (imageError) throw imageError;
+      console.log('Image downloaded for AI analysis');
 
-      // Load ONNX model
-      const modelBuffer = await modelData.arrayBuffer();
-      const session = await ort.InferenceSession.create(new Uint8Array(modelBuffer), {
-        executionProviders: ['cpu']
-      });
-      console.log('ONNX model loaded successfully');
-
-      // Preprocess image: In Deno, we'll use a simple pixel extraction
-      // For a production app, consider using npm:sharp for better image processing
+      // Convert image to base64
       const imageArrayBuffer = await imageData.arrayBuffer();
       const imageBytes = new Uint8Array(imageArrayBuffer);
-      
-      // Create a simplified preprocessing pipeline
-      // This is a basic implementation - for production use proper image processing
-      const inputTensor = new Float32Array(1 * 3 * 224 * 224);
-      
-      // ImageNet normalization constants
-      const mean = [0.485, 0.456, 0.406];
-      const std = [0.229, 0.224, 0.225];
-      
-      // Simple pixel filling (this is a placeholder - real implementation would
-      // need proper JPEG/PNG decoding and resizing)
-      // For now, we'll initialize with normalized values
-      for (let i = 0; i < 224 * 224; i++) {
-        const pixelIndex = i % imageBytes.length;
-        const grayValue = imageBytes[pixelIndex] / 255;
-        inputTensor[i] = (grayValue - mean[0]) / std[0];           // R channel
-        inputTensor[224 * 224 + i] = (grayValue - mean[1]) / std[1]; // G channel
-        inputTensor[224 * 224 * 2 + i] = (grayValue - mean[2]) / std[2]; // B channel
+      const base64Image = btoa(String.fromCharCode(...imageBytes));
+      const imageUrl = `data:image/png;base64,${base64Image}`;
+
+      // Get Lovable AI API key
+      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      if (!LOVABLE_API_KEY) {
+        throw new Error('LOVABLE_API_KEY not configured');
       }
 
-      // Run inference
-      const tensor = new ort.Tensor('float32', inputTensor, [1, 3, 224, 224]);
-      const feeds = { input: tensor };
-      const results = await session.run(feeds);
-      
-      // Get output
-      const output = results.output.data as Float32Array;
-      console.log('Model raw output:', Array.from(output));
+      // Call Lovable AI with vision capabilities
+      console.log('Calling Lovable AI for X-ray analysis...');
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            {
+              role: 'system',
+              content: `You are a medical AI assistant specialized in analyzing chest X-ray images for tuberculosis detection. 
+Analyze the provided X-ray image and determine if it shows signs of tuberculosis or appears normal.
 
-      // Apply softmax and get prediction
-      const exp = Array.from(output).map(x => Math.exp(x));
-      const sumExp = exp.reduce((a, b) => a + b, 0);
-      const probabilities = exp.map(x => x / sumExp);
-      
-      console.log('Probabilities:', probabilities);
-      
-      // Class 0: normal, Class 1: tuberculosis
-      const tbProbability = probabilities[1];
-      prediction = tbProbability > 0.5 ? 'tuberculosis' : 'normal';
-      confidence = Math.round(Math.max(...probabilities) * 100);
+Respond ONLY with a valid JSON object in this exact format:
+{"prediction": "tuberculosis" or "normal", "confidence": number between 70-95}
 
-      console.log(`ONNX Prediction: ${prediction}, Confidence: ${confidence}%`);
+Base your analysis on:
+- Lung opacity patterns
+- Presence of infiltrates or cavitations
+- Abnormal densities
+- Overall lung field appearance
 
-    } catch (modelError) {
-      console.error('ONNX inference error:', modelError);
-      const errorMessage = modelError instanceof Error ? modelError.message : 'Unknown error';
-      console.error(`Model inference failed: ${errorMessage}`);
+Be conservative with confidence scores - use 70-85% for clear cases and 85-95% for very obvious cases.`
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Analyze this chest X-ray image for signs of tuberculosis. Respond only with the JSON object as specified.'
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: imageUrl
+                  }
+                }
+              ]
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 100
+        })
+      });
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error('AI API error:', aiResponse.status, errorText);
+        throw new Error(`AI API error: ${aiResponse.status}`);
+      }
+
+      const aiResult = await aiResponse.json();
+      const aiContent = aiResult.choices?.[0]?.message?.content;
       
-      // Fallback to basic prediction if model fails
+      console.log('AI response:', aiContent);
+
+      // Parse AI response
+      const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const analysis = JSON.parse(jsonMatch[0]);
+        prediction = analysis.prediction;
+        confidence = analysis.confidence;
+        console.log(`AI Analysis: ${prediction} with ${confidence}% confidence`);
+      } else {
+        throw new Error('Could not parse AI response');
+      }
+
+    } catch (aiError) {
+      console.error('AI vision analysis error:', aiError);
+      const errorMessage = aiError instanceof Error ? aiError.message : 'Unknown error';
+      console.error(`Analysis failed: ${errorMessage}`);
+      
+      // Fallback to conservative prediction
       prediction = 'normal';
       confidence = 70;
-      console.log('Using fallback prediction due to inference error');
+      console.log('Using fallback prediction due to analysis error');
     }
 
     // Store detection result in database
