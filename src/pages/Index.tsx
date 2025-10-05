@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTBModel } from '@/hooks/useTBModel';
 import { FileUpload } from "@/components/FileUpload";
 import { ResultsDisplay } from "@/components/ResultsDisplay";
 import { TBChatbot } from "@/components/TBChatbot";
@@ -22,6 +23,7 @@ const Index = () => {
   const [result, setResult] = useState<DetectionResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { user, session, loading, signOut } = useAuth();
+  const { predict, isModelLoading, modelError } = useTBModel();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -53,51 +55,71 @@ const Index = () => {
       return;
     }
 
+    if (modelError) {
+      toast({
+        title: "Model Error",
+        description: "Failed to load AI model. Please refresh the page.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (isModelLoading) {
+      toast({
+        title: "Loading Model",
+        description: "AI model is still loading. Please wait...",
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     
     try {
-      console.log('Starting TB detection analysis...');
+      console.log('Starting client-side TB detection with ONNX model...');
       
-      const formData = new FormData();
-      formData.append('image', file);
+      // Run inference on the client side
+      const { prediction, confidence } = await predict(file);
+      
+      console.log('Client-side detection completed:', prediction, confidence);
 
-      const response = await supabase.functions.invoke('tb-detection', {
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
+      // Create result with local image URL
+      const imageUrl = URL.createObjectURL(file);
+      setResult({
+        prediction,
+        confidence,
+        image: imageUrl
       });
 
-      if (response.error) {
-        console.error('Detection error:', response.error);
-        throw response.error;
-      }
+      toast({
+        title: "Analysis Complete",
+        description: `Detection: ${prediction} (${confidence}% confidence)`,
+      });
 
-      if (response.data) {
-        console.log('Detection completed:', response.data);
-        setResult({
-          prediction: response.data.prediction,
-          confidence: response.data.confidence,
-          image: URL.createObjectURL(file)
-        });
-        toast({
-          title: "Analysis Complete",
-          description: `Detection: ${response.data.prediction} (${response.data.confidence}% confidence)`,
-        });
-      }
+      // Store result in database (fire and forget)
+      const fileName = `${Date.now()}-${file.name}`;
+      supabase.storage
+        .from('xray-uploads')
+        .upload(fileName, file)
+        .then(({ data: uploadData, error: uploadError }) => {
+          if (!uploadError && uploadData) {
+            return supabase
+              .from('tb_detections')
+              .insert({
+                user_id: user!.id,
+                image_path: fileName,
+                prediction: prediction,
+                confidence: confidence,
+              });
+          }
+        })
+        .catch(err => console.error('Background storage error:', err));
+
     } catch (error) {
       console.error('Error during TB detection:', error);
-      // Fallback to mock result if API fails
-      const mockResult: DetectionResult = {
-        prediction: Math.random() > 0.7 ? 'tuberculosis' : 'normal',
-        confidence: Math.floor(Math.random() * 30) + 70,
-        image: URL.createObjectURL(file)
-      };
-      setResult(mockResult);
       toast({
-        title: "Analysis Complete (Demo Mode)",
-        description: `Detection: ${mockResult.prediction} (${mockResult.confidence}% confidence)`,
-        variant: "default"
+        title: "Analysis Error",
+        description: error instanceof Error ? error.message : "Failed to analyze image",
+        variant: "destructive"
       });
     } finally {
       setIsAnalyzing(false);
