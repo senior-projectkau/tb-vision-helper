@@ -17,21 +17,23 @@ export const useTBModel = () => {
       try {
         console.log('Loading TB detection model from storage...');
         
-        // Download model from Supabase storage
-        const { data, error } = await supabase.storage
+        // Get the public URL for the model
+        const { data: urlData } = supabase.storage
           .from('tb-models')
-          .download('tb_model1.onnx');
+          .getPublicUrl('tb_model1.onnx');
 
-        if (error) {
-          console.error('Error downloading model:', error);
-          throw error;
+        console.log('Model URL:', urlData.publicUrl);
+
+        // Fetch the model file
+        const response = await fetch(urlData.publicUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch model: ${response.status} ${response.statusText}`);
         }
 
-        console.log(`Model downloaded: ${data.size} bytes`);
+        const arrayBuffer = await response.arrayBuffer();
+        console.log(`Model downloaded: ${arrayBuffer.byteLength} bytes`);
 
-        // Convert blob to array buffer
-        const arrayBuffer = await data.arrayBuffer();
-        
         // Create inference session
         console.log('Creating ONNX inference session...');
         const modelSession = await ort.InferenceSession.create(arrayBuffer, {
