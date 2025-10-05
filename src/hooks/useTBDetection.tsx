@@ -165,6 +165,13 @@ export const useTBDetection = () => {
       
       console.log(`Prediction: ${prediction} with ${confidence}% confidence`);
       
+      // Validate if image is likely a medical X-ray
+      // Low confidence suggests the image might not be a chest X-ray
+      const MIN_CONFIDENCE_THRESHOLD = 60;
+      if (confidence < MIN_CONFIDENCE_THRESHOLD) {
+        throw new Error('Invalid image: This does not appear to be a valid chest X-ray. Please upload a proper chest X-ray image for analysis.');
+      }
+      
       setIsLoading(false);
       
       return { prediction, confidence };
