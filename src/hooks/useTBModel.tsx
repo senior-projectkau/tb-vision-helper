@@ -16,45 +16,46 @@ export const useTBModel = () => {
     const loadModel = async () => {
       try {
         console.log('Loading TB detection model from storage...');
+        console.log('Expected file size: ~44.7 MB');
         
-        // Create a signed URL for secure access
-        const { data: signedUrlData, error: urlError } = await supabase.storage
+        // Use authenticated download method - this works as shown in network logs
+        const { data, error } = await supabase.storage
           .from('tb-models')
-          .createSignedUrl('tb_model1.onnx', 3600); // 1 hour expiry
+          .download('tb_model1.onnx');
 
-        if (urlError || !signedUrlData) {
-          console.error('Error creating signed URL:', urlError);
-          throw new Error(`Storage URL error: ${urlError?.message || 'No URL returned'}`);
+        if (error) {
+          console.error('Storage download error:', error);
+          throw new Error(`Storage error: ${error.message}`);
         }
 
-        console.log('Fetching model from signed URL...');
-
-        // Fetch with explicit headers
-        const response = await fetch(signedUrlData.signedUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/octet-stream',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!data) {
+          throw new Error('No model data received from storage');
         }
 
-        const arrayBuffer = await response.arrayBuffer();
-        console.log(`Model downloaded: ${arrayBuffer.byteLength} bytes`);
+        console.log(`Model blob received: ${data.size} bytes (${(data.size / 1024 / 1024).toFixed(2)} MB), type: ${data.type}`);
 
-        // Verify it's actually a binary file, not HTML
+        // Verify file size is reasonable (should be ~44.7 MB)
+        if (data.size < 1000000) {
+          throw new Error(`Model file too small: ${data.size} bytes - may be corrupted`);
+        }
+
+        // Convert to ArrayBuffer and verify it's binary ONNX format
+        const arrayBuffer = await data.arrayBuffer();
         const firstBytes = new Uint8Array(arrayBuffer.slice(0, 4));
         const magicWord = Array.from(firstBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
         console.log(`First 4 bytes (magic word): ${magicWord}`);
         
-        // ONNX files should start with "08 00 00 00" or similar
-        if (firstBytes[0] === 0x3c) { // '<' character indicates HTML
-          throw new Error('Received HTML instead of ONNX model file');
+        // Check for HTML (starts with '<' = 0x3c)
+        if (firstBytes[0] === 0x3c) {
+          throw new Error('Received HTML instead of ONNX model file - storage access issue');
         }
 
-        console.log(`Valid ONNX model file confirmed`);
+        // ONNX/Protobuf files typically start with 0x08
+        if (firstBytes[0] !== 0x08) {
+          console.warn('Unexpected magic word - expected ONNX format starting with 0x08');
+        }
+
+        console.log(`✓ Valid model file confirmed: ${arrayBuffer.byteLength} bytes`);
 
         // Create inference session
         console.log('Creating ONNX inference session...');
