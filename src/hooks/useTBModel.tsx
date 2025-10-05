@@ -7,6 +7,9 @@ interface ModelResult {
   confidence: number;
 }
 
+// Configure ONNX Runtime to use CDN for WASM files
+ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+
 export const useTBModel = () => {
   const [model, setModel] = useState<ort.InferenceSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
