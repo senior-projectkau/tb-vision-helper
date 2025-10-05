@@ -61,49 +61,103 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
-      console.log('Starting TB detection analysis...');
+      console.log('Starting TB detection analysis using your trained model...');
       
-      const formData = new FormData();
-      formData.append('image', file);
+      // Dynamic import of transformers library
+      const { pipeline } = await import('@huggingface/transformers');
+      
+      // Upload image to storage first
+      const fileName = `${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('xray-uploads')
+        .upload(fileName, file);
 
-      const response = await supabase.functions.invoke('tb-detection', {
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Image uploaded. Loading your TB detection model...');
+
+      // Get the model URL from Supabase storage
+      const { data: modelUrlData } = supabase.storage
+        .from('tb-models')
+        .getPublicUrl('tb_model1.onnx');
+
+      console.log('Model URL:', modelUrlData.publicUrl);
+
+      // Create image classification pipeline with your custom model
+      const classifier = await pipeline('image-classification', modelUrlData.publicUrl);
+      
+      console.log('Running inference on X-ray with your trained model...');
+      
+      // Run inference on the uploaded file
+      const result: any = await classifier(file);
+      
+      console.log('Inference completed. Results:', result);
+
+      // Parse results
+      let prediction = 'normal';
+      let confidence = 0;
+
+      if (result && Array.isArray(result) && result.length > 0) {
+        // Find tuberculosis and normal predictions
+        const tbResult = result.find((r: any) => 
+          r.label?.toLowerCase().includes('tuberculosis') || 
+          r.label?.toLowerCase().includes('tb') ||
+          r.label === '1' || 
+          r.label === 'positive'
+        );
+        
+        const normalResult = result.find((r: any) => 
+          r.label?.toLowerCase().includes('normal') || 
+          r.label === '0' || 
+          r.label === 'negative'
+        );
+        
+        const tbScore = (tbResult?.score || 0) as number;
+        const normalScore = (normalResult?.score || 0) as number;
+        
+        const isTuberculosis = tbScore > normalScore;
+        prediction = isTuberculosis ? 'tuberculosis' : 'normal';
+        confidence = Math.round(Math.max(tbScore, normalScore) * 100);
+        
+        console.log(`Your Model Prediction: ${prediction} (TB: ${(tbScore * 100).toFixed(1)}%, Normal: ${(normalScore * 100).toFixed(1)}%)`);
+      }
+
+      // Store in database
+      const { error: dbError } = await supabase
+        .from('tb_detections')
+        .insert({
+          user_id: user.id,
+          image_path: fileName,
+          prediction: prediction,
+          confidence: confidence,
+        });
+
+      if (dbError) {
+        console.error('Database error:', dbError);
+      }
+
+      setResult({
+        prediction: prediction as 'normal' | 'tuberculosis',
+        confidence: confidence,
+        image: URL.createObjectURL(file)
       });
 
-      if (response.error) {
-        console.error('Detection error:', response.error);
-        throw response.error;
-      }
+      toast({
+        title: "Analysis Complete",
+        description: `Detection: ${prediction} (${confidence}% confidence)`,
+      });
 
-      if (response.data) {
-        console.log('Detection completed:', response.data);
-        setResult({
-          prediction: response.data.prediction,
-          confidence: response.data.confidence,
-          image: URL.createObjectURL(file)
-        });
-        toast({
-          title: "Analysis Complete",
-          description: `Detection: ${response.data.prediction} (${response.data.confidence}% confidence)`,
-        });
-      }
     } catch (error) {
       console.error('Error during TB detection:', error);
-      // Fallback to mock result if API fails
-      const mockResult: DetectionResult = {
-        prediction: Math.random() > 0.7 ? 'tuberculosis' : 'normal',
-        confidence: Math.floor(Math.random() * 30) + 70,
-        image: URL.createObjectURL(file)
-      };
-      setResult(mockResult);
       toast({
-        title: "Analysis Complete (Demo Mode)",
-        description: `Detection: ${mockResult.prediction} (${mockResult.confidence}% confidence)`,
-        variant: "default"
+        title: "Analysis Failed",
+        description: error instanceof Error ? error.message : "An error occurred during analysis",
+        variant: "destructive"
       });
+      setIsAnalyzing(false);
     } finally {
       setIsAnalyzing(false);
     }
