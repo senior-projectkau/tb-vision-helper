@@ -2,3 +2,6 @@ project_id = "fxndgbdmgvfheucntkbi"
 
 [functions.tb-detection]
 verify_jwt = false
+
+[functions.tb-chat]
+verify_jwt = false

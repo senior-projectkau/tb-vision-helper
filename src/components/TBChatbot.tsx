@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { MessageCircle, X, Send, Bot, User } from "lucide-react";
+import { MessageCircle, X, Send, Bot, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
@@ -12,89 +14,22 @@ interface Message {
   timestamp: Date;
 }
 
-const TB_RESPONSES: Record<string, string> = {
-  'symptoms': 'Common TB symptoms include persistent cough (lasting 3+ weeks), chest pain, coughing up blood, weight loss, fever, night sweats, and fatigue. If you experience these symptoms, consult a healthcare professional.',
-  'treatment': 'TB treatment typically involves a combination of antibiotics taken for 6-9 months. The most common drugs include isoniazid, rifampin, ethambutol, and pyrazinamide. Treatment must be completed as prescribed by a doctor.',
-  'contagious': 'TB is contagious and spreads through airborne droplets when someone with active pulmonary TB coughs, sneezes, or speaks. However, it requires prolonged close contact for transmission.',
-  'prevention': 'TB prevention includes: getting vaccinated with BCG (in some countries), avoiding close contact with active TB patients, maintaining good ventilation, covering mouth when coughing, and regular screening if at high risk.',
-  'diagnosis': 'TB diagnosis involves chest X-rays, sputum tests, skin tests (TST), blood tests (IGRA), and sometimes CT scans or biopsies. Multiple tests may be needed for accurate diagnosis.',
-  'types': 'There are two main types: Latent TB (inactive, not contagious) and Active TB (symptomatic, contagious). Active TB can affect lungs (pulmonary) or other body parts (extrapulmonary).'
-};
-
 export const TBChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Hello! I\'m your TB information assistant. I can help answer questions about tuberculosis symptoms, treatment, prevention, and more. What would you like to know?',
+      text: 'Hello! I\'m your AI-powered TB information assistant. I can help answer questions about tuberculosis symptoms, treatment, prevention, diagnosis, and more. What would you like to know?',
       isBot: true,
       timestamp: new Date()
     }
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  const generateResponse = (userMessage: string): string => {
-    const message = userMessage.toLowerCase();
-    
-    // Check if the message is TB-related at all
-    const tbKeywords = ['tb', 'tuberculosis', 'chest', 'lung', 'cough', 'x-ray', 'xray'];
-    const isTbRelated = tbKeywords.some(keyword => message.includes(keyword));
-    
-    // If not TB-related, respond appropriately
-    if (!isTbRelated) {
-      return 'I\'m specifically designed to help with tuberculosis (TB) related questions. I can provide information about TB symptoms, treatment, prevention, diagnosis, and types. Is there something about TB you\'d like to know?';
-    }
-    
-    // Enhanced keyword matching for TB-related questions
-    if (message.includes('prevent') || message.includes('prevention') || 
-        message.includes('how to avoid') || message.includes('stop getting')) {
-      return TB_RESPONSES.prevention;
-    }
-    
-    if (message.includes('symptom') || message.includes('sign') || 
-        message.includes('how do i know') || message.includes('what are the')) {
-      return TB_RESPONSES.symptoms;
-    }
-    
-    if (message.includes('treat') || message.includes('cure') || 
-        message.includes('medicine') || message.includes('drug') || message.includes('antibiotic')) {
-      return TB_RESPONSES.treatment;
-    }
-    
-    if (message.includes('contagious') || message.includes('spread') || 
-        message.includes('catch') || message.includes('transmit')) {
-      return TB_RESPONSES.contagious;
-    }
-    
-    if (message.includes('diagnos') || message.includes('detect') || 
-        message.includes('find out') || message.includes('how to know')) {
-      return TB_RESPONSES.diagnosis;
-    }
-    
-    if (message.includes('type') || message.includes('kind') || 
-        message.includes('different') || message.includes('latent') || message.includes('active')) {
-      return TB_RESPONSES.types;
-    }
-    
-    // Check for specific question patterns
-    if (message.includes('what') && (message.includes('tb') || message.includes('tuberculosis'))) {
-      return 'Tuberculosis (TB) is an infectious disease caused by bacteria that primarily affects the lungs. It can be serious but is treatable with proper medical care.';
-    }
-    
-    if (message.includes('test') || message.includes('screening') || message.includes('check')) {
-      return 'TB testing includes chest X-rays, sputum tests, tuberculin skin tests, and blood tests. Regular screening is important for high-risk individuals.';
-    }
-    
-    if (message.includes('vaccine') || message.includes('bcg') || message.includes('shot')) {
-      return 'The BCG vaccine provides some protection against TB, especially in children. Its effectiveness varies by region and is not used in all countries.';
-    }
-    
-    // Fallback for TB-related questions that don't match specific patterns
-    return 'I can help with information about TB symptoms, treatment, prevention, diagnosis, and types. Could you be more specific about what aspect of tuberculosis you\'d like to know about?';
-  };
-
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -103,15 +38,44 @@ export const TBChatbot = () => {
       timestamp: new Date()
     };
 
-    const botResponse: Message = {
-      id: (Date.now() + 1).toString(),
-      text: generateResponse(inputValue),
-      isBot: true,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage, botResponse]);
+    setMessages(prev => [...prev, userMessage]);
     setInputValue('');
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('tb-chat', {
+        body: { message: inputValue }
+      });
+
+      if (error) throw error;
+
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: data.response,
+        isBot: true,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, botResponse]);
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      toast({
+        title: "Error",
+        description: "Failed to get response. Please try again.",
+        variant: "destructive"
+      });
+
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I encountered an error. Please try asking your question again.",
+        isBot: true,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -196,13 +160,19 @@ export const TBChatbot = () => {
                 onKeyPress={handleKeyPress}
                 placeholder="Ask about TB symptoms, treatment..."
                 className="flex-1"
+                disabled={isLoading}
               />
               <Button 
                 onClick={handleSendMessage}
                 size="icon"
                 className="bg-primary hover:bg-primary/90"
+                disabled={isLoading}
               >
-                <Send className="h-4 w-4" />
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
           </div>
