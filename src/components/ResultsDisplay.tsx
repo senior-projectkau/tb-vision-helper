@@ -1,4 +1,4 @@
-import { CheckCircle, AlertTriangle, RotateCcw, Loader2 } from "lucide-react";
+import { CheckCircle, AlertTriangle, RotateCcw, Loader2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -8,9 +8,11 @@ interface ResultsDisplayProps {
   result: DetectionResult | null;
   isAnalyzing: boolean;
   onReset: () => void;
+  patientName?: string;
+  onDownloadReport?: () => void;
 }
 
-export const ResultsDisplay = ({ result, isAnalyzing, onReset }: ResultsDisplayProps) => {
+export const ResultsDisplay = ({ result, isAnalyzing, onReset, patientName, onDownloadReport }: ResultsDisplayProps) => {
   if (isAnalyzing) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -135,14 +137,26 @@ export const ResultsDisplay = ({ result, isAnalyzing, onReset }: ResultsDisplayP
             )}
           </div>
 
-          <Button 
-            onClick={onReset} 
-            variant="outline" 
-            className="w-full mt-6 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Analyze Another X-ray
-          </Button>
+          <div className="space-y-3 mt-6">
+            {onDownloadReport && (
+              <Button 
+                onClick={onDownloadReport} 
+                className="w-full bg-success text-white hover:bg-success/90"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF Report
+              </Button>
+            )}
+            
+            <Button 
+              onClick={onReset} 
+              variant="outline" 
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Analyze Another X-ray
+            </Button>
+          </div>
         </Card>
       </div>
     </div>

@@ -10,6 +10,7 @@ import DetectionHistory from "@/components/DetectionHistory";
 import { Activity, Stethoscope, Shield, Zap, CheckCircle, User, LogOut, History, Clock } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { generatePDFReport } from '@/utils/generatePDFReport';
 import medicalRoom from "@/assets/medical-room.jpg";
 import doctorAnalysis from "@/assets/doctor-analysis.jpg";
 import tbBacteria from "@/assets/tb-bacteria.jpg";
@@ -24,6 +25,7 @@ const Index = () => {
   const [result, setResult] = useState<DetectionResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [patientName, setPatientName] = useState<string>('');
   const { user, session, loading, signOut } = useAuth();
   const { detectTB, loadModel, isLoading: modelLoading, error: modelError, modelLoaded } = useTBDetection();
   const navigate = useNavigate();
@@ -34,6 +36,27 @@ const Index = () => {
       navigate('/auth');
     }
   }, [user, loading, navigate]);
+
+  // Fetch patient name from profile
+  useEffect(() => {
+    const fetchPatientName = async () => {
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (data?.full_name) {
+          setPatientName(data.full_name);
+        } else {
+          setPatientName(user.email || 'Patient');
+        }
+      }
+    };
+    
+    fetchPatientName();
+  }, [user]);
 
   // Load the TB detection model when component mounts
   useEffect(() => {
@@ -140,6 +163,23 @@ const Index = () => {
   const resetAnalysis = () => {
     setResult(null);
     setIsAnalyzing(false);
+  };
+
+  const handleDownloadReport = () => {
+    if (result) {
+      generatePDFReport({
+        patientName: patientName || 'Patient',
+        date: new Date(),
+        prediction: result.prediction,
+        confidence: result.confidence,
+        image: result.image
+      });
+      
+      toast({
+        title: "Report Downloaded",
+        description: "Your TB detection report has been downloaded successfully.",
+      });
+    }
   };
 
   const handleSignOut = async () => {
@@ -400,7 +440,9 @@ const Index = () => {
                 <ResultsDisplay 
                   result={result} 
                   isAnalyzing={isAnalyzing} 
-                  onReset={resetAnalysis} 
+                  onReset={resetAnalysis}
+                  patientName={patientName}
+                  onDownloadReport={handleDownloadReport}
                 />
               </div>
             </div>
