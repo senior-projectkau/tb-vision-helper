@@ -56,7 +56,7 @@ STRICT RULES:
         ],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 300,
+          maxOutputTokens: 1024,
         }
       }),
     });
@@ -79,9 +79,13 @@ STRICT RULES:
     // Handle different response structures
     let aiResponse;
     if (data.candidates && data.candidates[0]) {
-      aiResponse = data.candidates[0].content.parts[0].text;
-    } else if (data.content && data.content.parts) {
-      aiResponse = data.content.parts[0].text;
+      const candidate = data.candidates[0];
+      if (candidate.content && candidate.content.parts && candidate.content.parts[0]) {
+        aiResponse = candidate.content.parts[0].text;
+      } else {
+        console.error("No content.parts in response. Finish reason:", candidate.finishReason);
+        throw new Error("AI response was incomplete. Please try asking a shorter question.");
+      }
     } else {
       console.error("Unexpected response structure:", data);
       throw new Error("Unexpected API response structure");
