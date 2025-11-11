@@ -12,27 +12,16 @@ serve(async (req) => {
 
   try {
     const { message } = await req.json();
-    // Use the AI gateway API key from environment
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    // Use Google Gemini API key from environment
+    const apiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
 
     if (!apiKey) {
-      throw new Error("API key is not configured");
+      throw new Error("Google Gemini API key is not configured");
     }
 
     console.log("Received message:", message);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are a specialized Tuberculosis (TB) medical information assistant. 
+    const systemPrompt = `You are a specialized Tuberculosis (TB) medical information assistant. 
 
 STRICT RULES:
 1. ONLY answer questions related to tuberculosis (TB), including:
@@ -51,15 +40,24 @@ STRICT RULES:
 
 3. Keep answers clear, accurate, and concise (2-4 sentences)
 4. Always recommend consulting healthcare professionals for diagnosis and treatment
-5. Be empathetic and supportive in your responses`
-          },
+5. Be empathetic and supportive in your responses`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-latest:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
           {
             role: "user",
-            content: message
+            parts: [{ text: `${systemPrompt}\n\nUser question: ${message}` }]
           }
         ],
-        temperature: 0.7,
-        max_tokens: 300
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 300,
+        }
       }),
     });
 
@@ -70,19 +68,13 @@ STRICT RULES:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Service temporarily unavailable. Please try again later." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("Google Gemini API error:", response.status, errorText);
       throw new Error("Failed to get AI response");
     }
 
     const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
+    const aiResponse = data.candidates[0].content.parts[0].text;
 
     console.log("AI response:", aiResponse);
 
