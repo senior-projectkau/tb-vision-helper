@@ -12,7 +12,7 @@ serve(async (req) => {
 
   try {
     const { message } = await req.json();
-    // Use the AI gateway API key from environment
+    // API key from external AI service platform
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
 
     if (!apiKey) {
