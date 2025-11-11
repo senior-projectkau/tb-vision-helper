@@ -74,7 +74,18 @@ STRICT RULES:
     }
 
     const data = await response.json();
-    const aiResponse = data.candidates[0].content.parts[0].text;
+    console.log("Full API response:", JSON.stringify(data, null, 2));
+    
+    // Handle different response structures
+    let aiResponse;
+    if (data.candidates && data.candidates[0]) {
+      aiResponse = data.candidates[0].content.parts[0].text;
+    } else if (data.content && data.content.parts) {
+      aiResponse = data.content.parts[0].text;
+    } else {
+      console.error("Unexpected response structure:", data);
+      throw new Error("Unexpected API response structure");
+    }
 
     console.log("AI response:", aiResponse);
 
