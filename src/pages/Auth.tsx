@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield, Stethoscope } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Loader2, Shield, Stethoscope, User, UserCog } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Auth() {
@@ -16,6 +17,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<'patient' | 'doctor'>('patient');
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -38,7 +40,7 @@ export default function Auth() {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -56,6 +58,18 @@ export default function Auth() {
           setError(error.message);
         }
         return;
+      }
+
+      // Update the profile with the selected role
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ role: role })
+          .eq('user_id', data.user.id);
+        
+        if (profileError) {
+          console.error('Error updating profile role:', profileError);
+        }
       }
 
       toast({
@@ -200,7 +214,7 @@ export default function Auth() {
                       id="signup-name"
                       name="fullName"
                       type="text"
-                      placeholder="Dr. John Smith"
+                      placeholder="John Smith"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
@@ -215,7 +229,7 @@ export default function Auth() {
                       id="signup-email"
                       name="email"
                       type="email"
-                      placeholder="doctor@hospital.com"
+                      placeholder="email@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -239,6 +253,48 @@ export default function Auth() {
                       className="transition-medical focus:ring-2 focus:ring-primary"
                     />
                   </div>
+
+                  {/* Role Selection */}
+                  <div className="space-y-3">
+                    <Label>I am a:</Label>
+                    <RadioGroup 
+                      value={role} 
+                      onValueChange={(value) => setRole(value as 'patient' | 'doctor')}
+                      className="grid grid-cols-2 gap-4"
+                      disabled={isLoading}
+                    >
+                      <div className="relative">
+                        <RadioGroupItem 
+                          value="patient" 
+                          id="role-patient" 
+                          className="peer sr-only" 
+                        />
+                        <Label
+                          htmlFor="role-patient"
+                          className="flex flex-col items-center justify-center rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10 cursor-pointer transition-all"
+                        >
+                          <User className="mb-2 h-6 w-6" />
+                          <span className="font-medium">Patient</span>
+                          <span className="text-xs text-muted-foreground">Upload my X-rays</span>
+                        </Label>
+                      </div>
+                      <div className="relative">
+                        <RadioGroupItem 
+                          value="doctor" 
+                          id="role-doctor" 
+                          className="peer sr-only" 
+                        />
+                        <Label
+                          htmlFor="role-doctor"
+                          className="flex flex-col items-center justify-center rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10 cursor-pointer transition-all"
+                        >
+                          <UserCog className="mb-2 h-6 w-6" />
+                          <span className="font-medium">Doctor</span>
+                          <span className="text-xs text-muted-foreground">Analyze patient X-rays</span>
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
                   
                   <Button 
                     type="submit" 
@@ -246,7 +302,7 @@ export default function Auth() {
                     disabled={isLoading || !email || !password || !fullName}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isLoading ? 'Creating Account...' : 'Create Account with Email & Password'}
+                    {isLoading ? 'Creating Account...' : `Sign Up as ${role === 'doctor' ? 'Doctor' : 'Patient'}`}
                   </Button>
                 </form>
               </TabsContent>
