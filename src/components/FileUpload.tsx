@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 
 interface FileUploadProps {
   onUpload: (file: File, patientName: string) => void;
+  isDoctor?: boolean;
+  defaultPatientName?: string;
 }
 
-export const FileUpload = ({ onUpload }: FileUploadProps) => {
+export const FileUpload = ({ onUpload, isDoctor = false, defaultPatientName = '' }: FileUploadProps) => {
   const [error, setError] = useState<string>("");
   const [patientName, setPatientName] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -20,9 +22,15 @@ export const FileUpload = ({ onUpload }: FileUploadProps) => {
     const file = acceptedFiles[0];
     if (file) {
       setError("");
-      setSelectedFile(file);
+      if (isDoctor) {
+        // For doctors, require patient name before upload
+        setSelectedFile(file);
+      } else {
+        // For patients, upload immediately with their own name
+        onUpload(file, defaultPatientName);
+      }
     }
-  }, []);
+  }, [isDoctor, defaultPatientName, onUpload]);
 
   const onDropRejected = useCallback(() => {
     setError("Please upload a valid image file (JPG, PNG, or DICOM)");
@@ -55,26 +63,28 @@ export const FileUpload = ({ onUpload }: FileUploadProps) => {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Patient Name Input */}
-      <Card className="p-6 mb-6 bg-card shadow-md border">
-        <div className="space-y-2">
-          <Label htmlFor="patientName" className="flex items-center gap-2 text-foreground font-medium">
-            <User className="h-4 w-4" />
-            Patient Name
-          </Label>
-          <Input
-            id="patientName"
-            type="text"
-            placeholder="Enter patient's full name"
-            value={patientName}
-            onChange={(e) => setPatientName(e.target.value)}
-            className="bg-background"
-          />
-          <p className="text-xs text-muted-foreground">
-            This name will be used to organize and identify the X-ray in your history
-          </p>
-        </div>
-      </Card>
+      {/* Patient Name Input - Only for Doctors */}
+      {isDoctor && (
+        <Card className="p-6 mb-6 bg-card shadow-md border">
+          <div className="space-y-2">
+            <Label htmlFor="patientName" className="flex items-center gap-2 text-foreground font-medium">
+              <User className="h-4 w-4" />
+              Patient Name
+            </Label>
+            <Input
+              id="patientName"
+              type="text"
+              placeholder="Enter patient's full name"
+              value={patientName}
+              onChange={(e) => setPatientName(e.target.value)}
+              className="bg-background"
+            />
+            <p className="text-xs text-muted-foreground">
+              This name will be used to organize and identify the X-ray in your history
+            </p>
+          </div>
+        </Card>
+      )}
 
       {/* File Upload Area */}
       <Card className="p-8 bg-gradient-card shadow-upload border-2 border-dashed border-border transition-all duration-300 hover:border-primary/50">
@@ -132,8 +142,8 @@ export const FileUpload = ({ onUpload }: FileUploadProps) => {
         </div>
       </Card>
 
-      {/* Submit Button */}
-      {selectedFile && (
+      {/* Submit Button - Only for Doctors with selected file */}
+      {isDoctor && selectedFile && (
         <div className="mt-6 flex justify-center">
           <Button 
             onClick={handleSubmit}
