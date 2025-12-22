@@ -26,6 +26,7 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [patientName, setPatientName] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>('patient');
   const { user, session, loading, signOut } = useAuth();
   const { detectTB, loadModel, isLoading: modelLoading, error: modelError, modelLoaded } = useTBDetection();
   const navigate = useNavigate();
@@ -37,13 +38,13 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
-  // Fetch patient name from profile
+  // Fetch patient name and role from profile
   useEffect(() => {
-    const fetchPatientName = async () => {
+    const fetchProfile = async () => {
       if (user) {
         const { data, error } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, role')
           .eq('user_id', user.id)
           .single();
         
@@ -52,10 +53,14 @@ const Index = () => {
         } else {
           setPatientName(user.email || 'Patient');
         }
+        
+        if (data?.role) {
+          setUserRole(data.role);
+        }
       }
     };
     
-    fetchPatientName();
+    fetchProfile();
   }, [user]);
 
   // Load the TB detection model when component mounts
@@ -393,7 +398,11 @@ const Index = () => {
                 </div>
                 
                 <div className="animate-scale-in">
-                  <FileUpload onUpload={handleImageUpload} />
+                  <FileUpload 
+                    onUpload={handleImageUpload} 
+                    isDoctor={userRole === 'doctor' || userRole === 'admin'}
+                    defaultPatientName={patientName}
+                  />
                 </div>
 
                 {/* Trust Indicators */}
