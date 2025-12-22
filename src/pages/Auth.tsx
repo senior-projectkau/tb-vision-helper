@@ -47,6 +47,7 @@ export default function Auth() {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: fullName,
+            role: role,
           }
         }
       });
@@ -58,18 +59,6 @@ export default function Auth() {
           setError(error.message);
         }
         return;
-      }
-
-      // Update the profile with the selected role
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ role: role })
-          .eq('user_id', data.user.id);
-        
-        if (profileError) {
-          console.error('Error updating profile role:', profileError);
-        }
       }
 
       toast({
