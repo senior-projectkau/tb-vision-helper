@@ -50,6 +50,7 @@ export type Database = {
           created_at: string
           id: string
           image_path: string
+          patient_name: string | null
           prediction: string
           user_id: string | null
         }
@@ -58,6 +59,7 @@ export type Database = {
           created_at?: string
           id?: string
           image_path: string
+          patient_name?: string | null
           prediction: string
           user_id?: string | null
         }
@@ -66,6 +68,7 @@ export type Database = {
           created_at?: string
           id?: string
           image_path?: string
+          patient_name?: string | null
           prediction?: string
           user_id?: string | null
         }

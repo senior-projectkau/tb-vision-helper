@@ -49,6 +49,7 @@ serve(async (req) => {
     let prediction: string;
     let confidence: number;
     let fileName: string;
+    let patientName: string | null = null;
     
     if (contentType.includes('multipart/form-data')) {
       // Legacy: Image upload with prediction
@@ -56,6 +57,7 @@ serve(async (req) => {
       imageFile = formData.get('image') as File;
       prediction = formData.get('prediction') as string || 'unknown';
       confidence = parseInt(formData.get('confidence') as string || '0');
+      patientName = formData.get('patient_name') as string || null;
       
       if (!imageFile) {
         return new Response(JSON.stringify({ error: 'No image file provided' }), {
@@ -88,9 +90,10 @@ serve(async (req) => {
       
       prediction = body.prediction;
       confidence = body.confidence;
+      patientName = body.patientName || null;
       fileName = `${Date.now()}-${body.fileName || 'xray.png'}`;
       
-      console.log(`Saving detection result: ${prediction} with ${confidence}% confidence`);
+      console.log(`Saving detection result for patient "${patientName}": ${prediction} with ${confidence}% confidence`);
     }
 
     // Upload image to Supabase Storage
@@ -113,6 +116,7 @@ serve(async (req) => {
         image_path: fileName,
         prediction: prediction,
         confidence: confidence,
+        patient_name: patientName,
       })
       .select()
       .single();

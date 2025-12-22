@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, CheckCircle2, Calendar, Eye, Download } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Calendar, Eye, Download, User, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface DetectionRecord {
   id: string;
@@ -14,12 +15,19 @@ interface DetectionRecord {
   confidence: number;
   image_path: string;
   created_at: string;
+  patient_name: string | null;
+}
+
+interface PatientGroup {
+  patientName: string;
+  detections: DetectionRecord[];
 }
 
 export default function DetectionHistory() {
   const [detections, setDetections] = useState<DetectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [expandedPatients, setExpandedPatients] = useState<Set<string>>(new Set());
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -34,7 +42,7 @@ export default function DetectionHistory() {
       setLoading(true);
       const { data, error } = await supabase
         .from('tb_detections')
-        .select('id, prediction, confidence, image_path, created_at')
+        .select('id, prediction, confidence, image_path, created_at, patient_name')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
 
@@ -45,10 +53,15 @@ export default function DetectionHistory() {
       // Type cast the prediction field to match our interface
       const typedDetections: DetectionRecord[] = (data || []).map(record => ({
         ...record,
-        prediction: record.prediction as 'normal' | 'tuberculosis'
+        prediction: record.prediction as 'normal' | 'tuberculosis',
+        patient_name: record.patient_name as string | null
       }));
 
       setDetections(typedDetections);
+      
+      // Auto-expand all patients on first load
+      const patientNames = new Set(typedDetections.map(d => d.patient_name || 'Unknown Patient'));
+      setExpandedPatients(patientNames);
     } catch (error) {
       console.error('Error fetching detection history:', error);
       toast({
@@ -59,6 +72,46 @@ export default function DetectionHistory() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Group detections by patient name
+  const groupedDetections = useMemo(() => {
+    const groups: Map<string, DetectionRecord[]> = new Map();
+    
+    detections.forEach(detection => {
+      const patientName = detection.patient_name || 'Unknown Patient';
+      if (!groups.has(patientName)) {
+        groups.set(patientName, []);
+      }
+      groups.get(patientName)!.push(detection);
+    });
+
+    // Convert to array and sort by most recent detection date
+    const patientGroups: PatientGroup[] = Array.from(groups.entries()).map(([patientName, dets]) => ({
+      patientName,
+      detections: dets
+    }));
+
+    // Sort groups by the most recent detection in each group
+    patientGroups.sort((a, b) => {
+      const aDate = new Date(a.detections[0].created_at).getTime();
+      const bDate = new Date(b.detections[0].created_at).getTime();
+      return bDate - aDate;
+    });
+
+    return patientGroups;
+  }, [detections]);
+
+  const togglePatient = (patientName: string) => {
+    setExpandedPatients(prev => {
+      const next = new Set(prev);
+      if (next.has(patientName)) {
+        next.delete(patientName);
+      } else {
+        next.add(patientName);
+      }
+      return next;
+    });
   };
 
   const getImageUrl = (imagePath: string) => {
@@ -110,6 +163,12 @@ export default function DetectionHistory() {
     }
   };
 
+  const getPatientStats = (dets: DetectionRecord[]) => {
+    const tbCount = dets.filter(d => d.prediction === 'tuberculosis').length;
+    const normalCount = dets.filter(d => d.prediction === 'normal').length;
+    return { tbCount, normalCount, total: dets.length };
+  };
+
   if (!user) {
     return null;
   }
@@ -119,7 +178,7 @@ export default function DetectionHistory() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Detection History</h2>
-          <p className="text-muted-foreground">View your previous chest X-ray analysis results</p>
+          <p className="text-muted-foreground">View your previous chest X-ray analysis results organized by patient</p>
         </div>
         <Button onClick={fetchDetectionHistory} variant="outline" size="sm">
           Refresh
@@ -164,67 +223,113 @@ export default function DetectionHistory() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {detections.map((detection) => (
-            <Card key={detection.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <CardTitle className="text-sm font-medium">
-                      {formatDate(detection.created_at)}
-                    </CardTitle>
-                  </div>
-                  <Badge 
-                    variant={detection.prediction === 'normal' ? 'default' : 'destructive'}
-                    className="flex items-center space-x-1"
-                  >
-                    {detection.prediction === 'normal' ? (
-                      <CheckCircle2 className="h-3 w-3" />
-                    ) : (
-                      <AlertCircle className="h-3 w-3" />
-                    )}
-                    <span className="capitalize">{detection.prediction}</span>
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex space-x-4">
-                  <div className="relative">
-                    <img 
-                      src={getImageUrl(detection.image_path)}
-                      alt="Chest X-ray" 
-                      className="h-24 w-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => setSelectedImage(getImageUrl(detection.image_path))}
-                    />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="absolute -top-2 -right-2 h-6 w-6 p-0"
-                      onClick={() => downloadImage(detection.image_path)}
+          {groupedDetections.map((group) => {
+            const stats = getPatientStats(group.detections);
+            const isExpanded = expandedPatients.has(group.patientName);
+            
+            return (
+              <Collapsible key={group.patientName} open={isExpanded}>
+                <Card className="overflow-hidden">
+                  <CollapsibleTrigger asChild>
+                    <CardHeader 
+                      className="cursor-pointer hover:bg-muted/50 transition-colors pb-3"
+                      onClick={() => togglePatient(group.patientName)}
                     >
-                      <Download className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <div>
-                      <CardDescription className="text-sm">
-                        <strong>Confidence:</strong> {detection.confidence}%
-                      </CardDescription>
-                      <CardDescription className="text-sm">
-                        <strong>Result:</strong> {detection.prediction === 'normal' ? 
-                          'No signs of tuberculosis detected' : 
-                          'Potential tuberculosis indicators found'
-                        }
-                      </CardDescription>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      ID: {detection.id.substring(0, 8)}...
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                          )}
+                          <div className="p-2 bg-primary/10 rounded-full">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-lg font-semibold">{group.patientName}</CardTitle>
+                            <CardDescription>
+                              {stats.total} scan{stats.total !== 1 ? 's' : ''} • 
+                              Last: {formatDate(group.detections[0].created_at)}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {stats.normalCount > 0 && (
+                            <Badge variant="default" className="flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              {stats.normalCount} Normal
+                            </Badge>
+                          )}
+                          {stats.tbCount > 0 && (
+                            <Badge variant="destructive" className="flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {stats.tbCount} TB Detected
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  
+                  <CollapsibleContent>
+                    <CardContent className="pt-0 space-y-3">
+                      {group.detections.map((detection) => (
+                        <div 
+                          key={detection.id} 
+                          className="flex space-x-4 p-3 bg-muted/30 rounded-lg border"
+                        >
+                          <div className="relative">
+                            <img 
+                              src={getImageUrl(detection.image_path)}
+                              alt="Chest X-ray" 
+                              className="h-20 w-20 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => setSelectedImage(getImageUrl(detection.image_path))}
+                            />
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="absolute -top-2 -right-2 h-6 w-6 p-0"
+                              onClick={() => downloadImage(detection.image_path)}
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                {formatDate(detection.created_at)}
+                              </div>
+                              <Badge 
+                                variant={detection.prediction === 'normal' ? 'default' : 'destructive'}
+                                className="flex items-center gap-1"
+                              >
+                                {detection.prediction === 'normal' ? (
+                                  <CheckCircle2 className="h-3 w-3" />
+                                ) : (
+                                  <AlertCircle className="h-3 w-3" />
+                                )}
+                                <span className="capitalize">{detection.prediction}</span>
+                              </Badge>
+                            </div>
+                            <CardDescription className="text-sm">
+                              <strong>Confidence:</strong> {detection.confidence}%
+                            </CardDescription>
+                            <CardDescription className="text-sm">
+                              {detection.prediction === 'normal' ? 
+                                'No signs of tuberculosis detected' : 
+                                'Potential tuberculosis indicators found'
+                              }
+                            </CardDescription>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
 
