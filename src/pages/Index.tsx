@@ -84,7 +84,7 @@ const Index = () => {
     return null;
   }
 
-  const handleImageUpload = async (file: File) => {
+  const handleImageUpload = async (file: File, patientNameInput: string) => {
     if (!session) {
       toast({
         title: "Authentication Required",
@@ -126,7 +126,8 @@ const Index = () => {
           imageData,
           fileName: file.name,
           prediction: detectionResult.prediction,
-          confidence: detectionResult.confidence
+          confidence: detectionResult.confidence,
+          patientName: patientNameInput
         }
       });
 
